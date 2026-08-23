@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nkrisk"
+version = "0.1.0"
+description = "Moteur de mesure de risque de portefeuille qui declare son incertitude"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26", "pandas>=2.0", "scipy>=1.11"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+data = ["yfinance>=0.2"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "slow: tests de couverture Monte Carlo (lents, mais les plus importants)",
+]
+# Par defaut on exclut les tests lents : la boucle de developpement doit
+# rester sous la seconde, sinon on cesse de lancer les tests.
+addopts = "-m 'not slow'"
