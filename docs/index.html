@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Démonstration interactive du moteur de mesure de risque nkrisk : décomposition d'Euler, incertitude des estimations et point aveugle de la VaR.">
+<meta property="og:title" content="Moteur de risque nkrisk">
+<meta property="og:description" content="D'où vient réellement le risque d'un portefeuille. Décomposition d'Euler interactive.">
+<meta property="og:type" content="website">
+<style>
+  :root{
+    color-scheme:light;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",sans-serif}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+<title>Moteur de risque nkrisk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Terminal de risque : bandeau de synthèse, atelier de pondération à gauche,
+   lecture du risque à droite, diagnostics empilés dessous. */
+:root{
+  --plane:#f4f5f7; --surface:#fcfcfd; --surface-2:#eef0f3;
+  --ink:#0b0e12; --ink-2:#51565e; --ink-muted:#858b94;
+  --rule:#dfe2e7; --rule-soft:#e9ebef; --baseline:#c3c7ce;
+  --capital:#2a78d6; --risque:#eb6834;
+  --neg:#2a78d6; --pos:#d03b3b; --mid:#f0efec;
+  --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+  --ring:rgba(11,14,18,.10);
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --plane:#0c0e11; --surface:#15181c; --surface-2:#1d2126;
+  --ink:#eef0f3; --ink-2:#b4bac2; --ink-muted:#858b94;
+  --rule:#272c32; --rule-soft:#20242a; --baseline:#363c44;
+  --capital:#3987e5; --risque:#d95926;
+  --neg:#3987e5; --pos:#e66767; --mid:#383835;
+  --good:#0ca30c; --warn:#fab219; --crit:#e66767;
+  --ring:rgba(255,255,255,.10);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --plane:#0c0e11; --surface:#15181c; --surface-2:#1d2126;
+  --ink:#eef0f3; --ink-2:#b4bac2; --ink-muted:#858b94;
+  --rule:#272c32; --rule-soft:#20242a; --baseline:#363c44;
+  --capital:#3987e5; --risque:#d95926;
+  --neg:#3987e5; --pos:#e66767; --mid:#383835;
+  --good:#0ca30c; --warn:#fab219; --crit:#e66767;
+  --ring:rgba(255,255,255,.10);
+}
+*{box-sizing:border-box}
+body{background:var(--plane);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.55;margin:0}
+.wrap{max-width:1180px;margin:0 auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:28px 56px}
+h1,h2,h3{text-wrap:balance;margin:0;font-weight:600;letter-spacing:-.011em}
+h1{font-size:1.6rem;line-height:1.2}
+h2{font-size:1.05rem;margin-bottom:.15rem}
+p{margin:0}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--mono);font-size:.69rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-muted);font-weight:500}
+
+/* ---- en-tête ---- */
+header.top{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:flex-end;
+  justify-content:space-between;padding-bottom:18px;border-bottom:1px solid var(--rule)}
+header.top .sub{color:var(--ink-2);font-size:.9rem;max-width:54ch;margin-top:5px}
+.repo{font-family:var(--mono);font-size:.76rem;color:var(--ink-2);
+  text-decoration:none;border-bottom:1px solid var(--rule);padding-bottom:2px;white-space:nowrap}
+.repo:hover{color:var(--ink);border-color:var(--capital)}
+
+/* ---- bandeau de synthèse ---- */
+.hero{display:grid;grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(0,1fr));
+  gap:1px;background:var(--rule-soft);border:1px solid var(--rule);
+  border-radius:10px;overflow:hidden;margin-top:22px}
+.cell{background:var(--surface);padding:16px 18px;min-width:0}
+.cell .lab{font-size:.74rem;color:var(--ink-muted);font-weight:500;
+  display:flex;align-items:center;gap:6px}
+.cell .big{font-family:var(--mono);font-size:2.15rem;font-weight:500;
+  line-height:1.1;margin-top:6px;letter-spacing:-.02em}
+.cell .v{font-family:var(--mono);font-size:1.5rem;font-weight:500;
+  line-height:1.15;margin-top:6px}
+.ci{font-family:var(--mono);font-size:.76rem;color:var(--ink-2);margin-top:7px}
+.note{font-size:.76rem;color:var(--ink-muted);margin-top:5px;line-height:1.4}
+
+/* ---- disposition ---- */
+.cols{display:grid;grid-template-columns:300px minmax(0,1fr);gap:18px;margin-top:18px}
+.panel{background:var(--surface);border:1px solid var(--rule);
+  border-radius:10px;padding:18px;min-width:0}
+.panel>.eyebrow{display:block;margin-bottom:12px}
+.panel .intro{font-size:.84rem;color:var(--ink-2);margin:-4px 0 14px;line-height:1.5}
+
+/* ---- curseurs ---- */
+.presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.presets button{font-family:var(--sans);font-size:.76rem;font-weight:500;
+  padding:5px 10px;border-radius:999px;border:1px solid var(--rule);
+  background:var(--surface-2);color:var(--ink-2);cursor:pointer;transition:.12s}
+.presets button:hover{border-color:var(--capital);color:var(--ink)}
+.presets button[aria-pressed="true"]{background:var(--capital);border-color:var(--capital);color:#fff}
+.presets button:focus-visible{outline:2px solid var(--capital);outline-offset:2px}
+.slider{margin-bottom:11px}
+.slider .row{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:.82rem;gap:8px}
+.slider .row .pct{font-family:var(--mono);font-variant-numeric:tabular-nums;
+  color:var(--ink-2);font-size:.8rem}
+.slider input[type=range]{width:100%;margin:3px 0 0;accent-color:var(--capital);height:18px}
+.total{display:flex;justify-content:space-between;font-size:.78rem;
+  color:var(--ink-muted);border-top:1px solid var(--rule-soft);
+  padding-top:10px;margin-top:4px}
+
+/* ---- graphique ---- */
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.79rem;
+  color:var(--ink-2);margin-bottom:14px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.swatch{width:11px;height:11px;border-radius:2px;flex:none}
+.chart{width:100%;min-width:560px;height:auto;display:block;overflow:visible}
+.chart text{font-family:var(--sans);font-size:11.5px;fill:var(--ink-2)}
+.chart text.name{font-size:12.5px;fill:var(--ink)}
+.chart text.val{font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums}
+.chart .grid{stroke:var(--rule-soft);stroke-width:1}
+.chart .axis{stroke:var(--baseline);stroke-width:1}
+.bar{transition:opacity .12s}
+.bar:hover{opacity:.78}
+
+/* ---- tableau ---- */
+.scroll{overflow-x:auto;margin:0 -2px}
+table{border-collapse:collapse;width:100%;font-size:.84rem;min-width:540px}
+th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--rule-soft);
+  white-space:nowrap}
+th{font-size:.71rem;text-transform:uppercase;letter-spacing:.055em;
+  color:var(--ink-muted);font-weight:500;border-bottom:1px solid var(--rule)}
+th:first-child,td:first-child{text-align:left}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr.sum td{border-bottom:none;border-top:1px solid var(--rule);
+  font-weight:600;padding-top:9px}
+.flag{display:inline-block;width:7px;height:7px;border-radius:50%;
+  margin-right:7px;vertical-align:middle;flex:none}
+
+/* ---- grille basse ---- */
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));
+  gap:18px;margin-top:18px}
+.hm{border-collapse:separate;border-spacing:2px;font-size:.73rem;min-width:430px}
+.hm th{font-weight:500;padding:3px 5px;border:none;text-transform:none;
+  letter-spacing:0;font-size:.71rem}
+.hm th.v{writing-mode:vertical-rl;text-orientation:mixed;height:62px;
+  padding:0;vertical-align:bottom}
+.hm td{font-family:var(--mono);font-variant-numeric:tabular-nums;
+  text-align:center;padding:6px 3px;border:none;border-radius:3px;
+  color:var(--ink);cursor:default}
+.hm td.self{color:var(--ink-muted)}
+
+.vartab td.n{font-size:.83rem}
+.pill{display:inline-block;font-family:var(--mono);font-size:.7rem;
+  padding:1px 7px;border-radius:999px;border:1px solid var(--ring)}
+
+/* ---- infobulle ---- */
+#tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;
+  background:var(--ink);color:var(--plane);font-size:.76rem;line-height:1.45;
+  padding:7px 10px;border-radius:6px;max-width:250px;z-index:50;
+  font-family:var(--sans);box-shadow:0 4px 14px rgba(0,0,0,.2)}
+#tip b{font-family:var(--mono);font-weight:500}
+
+footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--rule);
+  font-size:.79rem;color:var(--ink-muted);line-height:1.6}
+footer a{color:var(--ink-2)}
+
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr 1fr}
+  .cols{grid-template-columns:1fr}
+}
+@media (max-width:470px){
+  .hero{grid-template-columns:1fr}
+  .cell .big{font-size:1.85rem}
+  h1{font-size:1.35rem}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div>
+    <div class="eyebrow">nkrisk · moteur de mesure de risque</div>
+    <h1>D'où vient réellement le risque d'un portefeuille</h1>
+    <p class="sub">Sept positions presque équipondérées en capital. Déplace les
+      curseurs et la décomposition d'Euler se recalcule à chaque mouvement. La
+      somme des contributions égale toujours la volatilité totale, exactement
+      et non approximativement.</p>
+  </div>
+  <a class="repo" href="https://github.com/Dissane-Abiou/nkrisk">github.com/Dissane-Abiou/nkrisk ↗</a>
+</header>
+
+<section class="hero">
+  <div class="cell">
+    <div class="lab">Volatilité annualisée du portefeuille</div>
+    <div class="big num" id="volBig">—</div>
+    <div class="ci" id="volCi">—</div>
+    <div class="note">Intervalle de confiance à 95 %, estimé sur 2 016 jours.
+      Aucun chiffre n'est publié sans sa marge d'erreur.</div>
+  </div>
+  <div class="cell">
+    <div class="lab">Ratio de diversification</div>
+    <div class="v num" id="dr">—</div>
+    <div class="note">Moyenne pondérée des volatilités divisée par celle du
+      portefeuille. Vaut 1 quand la corrélation est parfaite.</div>
+  </div>
+  <div class="cell">
+    <div class="lab">Nombre effectif de paris</div>
+    <div class="v num" id="enb">—</div>
+    <div class="note" id="enbNote">—</div>
+  </div>
+  <div class="cell">
+    <div class="lab">Part du risque portée par la tech</div>
+    <div class="v num" id="techRisk">—</div>
+    <div class="note" id="techNote">—</div>
+  </div>
+</section>
+
+<div class="cols">
+  <aside class="panel">
+    <span class="eyebrow">Pondérations</span>
+    <div class="presets" id="presets"></div>
+    <div id="sliders"></div>
+    <div class="total"><span>Total</span><span class="num" id="total">100,0 %</span></div>
+    <p class="note" style="margin-top:12px">Les poids sont renormalisés à 100 %
+      après chaque mouvement. La covariance, elle, ne change pas : seule ta
+      répartition du capital bouge.</p>
+  </aside>
+
+  <div class="panel">
+    <span class="eyebrow">Capital engagé contre risque porté</span>
+    <p class="intro">Deux barres par position. Quand l'orange dépasse le bleu,
+      cette ligne consomme plus de risque qu'elle ne mobilise de capital.</p>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--capital)"></i>Part du capital</span>
+      <span><i class="swatch" style="background:var(--risque)"></i>Part du risque</span>
+    </div>
+    <div class="scroll"><svg class="chart" id="bars" viewBox="0 0 640 310" role="img"
+         aria-label="Comparaison, pour chaque position, de la part du capital et de la part du risque"></svg></div>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:18px">
+  <span class="eyebrow">Décomposition d'Euler</span>
+  <p class="intro">La contribution marginale est la dérivée ∂σₚ/∂wᵢ : le risque
+    qu'ajouterait un dollar de plus sur cette ligne. Une valeur négative signifie
+    qu'en acheter davantage réduirait le risque total.</p>
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th>Position</th><th>Poids</th><th>Volatilité propre</th>
+        <th>Contribution marginale</th><th>Contribution composante</th><th>Part du risque</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <p class="note" id="euler" style="margin-top:12px"></p>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <span class="eyebrow">Matrice de corrélation</span>
+    <p class="intro">C'est elle qui explique tout le reste. Les quatre lignes
+      tech sont corrélées entre 0,80 et 0,88 : elles ne forment pas quatre paris,
+      mais un seul, détenu quatre fois.</p>
+    <div class="scroll">
+      <table class="hm" id="heat"></table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <span class="eyebrow">Ce qu'il faut de données pour savoir quelque chose</span>
+    <p class="intro">Volatilité vraie fixée à 20 %. Chaque barre est l'intervalle
+      de confiance à 95 % qu'un estimateur honnête produit selon la taille de
+      l'échantillon.</p>
+    <div class="scroll"><svg class="chart" id="unc" viewBox="0 0 640 300" role="img"
+         aria-label="Largeur de l'intervalle de confiance sur la volatilité selon la taille de l'échantillon"></svg></div>
+    <p class="note" style="margin-top:10px">Sur un mois de données, une action à
+      15 % de volatilité et une action à 30 % sont indiscernables. Beaucoup
+      d'applications de courtage affichent pourtant ce chiffre sans avertissement.</p>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:18px">
+  <span class="eyebrow">Le point aveugle de la VaR</span>
+  <p class="intro">Deux séries de vingt ans, de volatilité rigoureusement
+    identique. Seule la forme de la distribution change. La VaR paramétrique ne
+    connaît que la moyenne et l'écart-type : elle rend donc presque la même
+    réponse pour les deux.</p>
+  <div class="scroll">
+    <table class="vartab">
+      <thead><tr>
+        <th>Régime</th><th>Kurtosis</th><th>Pire journée</th>
+        <th>VaR paramétrique</th><th>VaR historique</th>
+        <th>CVaR historique</th><th>CVaR / VaR</th>
+      </tr></thead>
+      <tbody id="varBody"></tbody>
+    </table>
+  </div>
+  <p class="note" style="margin-top:12px">Le ratio CVaR/VaR est le signal à
+    surveiller : autour de 1,15 la queue est à peu près gaussienne ; au-delà de
+    1,3 elle est lourde et la VaR seule devient trompeuse.</p>
+</div>
+
+<footer>
+  <p>Données synthétiques à propriétés statistiques connues — c'est ce qui permet
+  de vérifier qu'un estimateur retrouve la bonne réponse, chose impossible sur
+  des données réelles où la vraie valeur est inobservable. Les calculs de cette
+  page reproduisent ceux du moteur Python, validés par 47 tests répartis sur
+  quatre niveaux, dont des tests de couverture Monte Carlo et une validation
+  croisée contre scikit-learn.</p>
+  <p style="margin-top:10px">Ce moteur mesure des expositions. Il ne recommande
+  aucun placement et ne constitue pas un conseil en investissement.
+  <a href="https://github.com/Dissane-Abiou/nkrisk">Code source et documentation</a>.</p>
+</footer>
+</div>
+
+<div id="tip" role="status"></div>
+
+<script>
+const DATA = {"assets": ["Tech A", "Tech B", "Tech C", "Tech D", "Banque", "Or", "Obligations"], "cov": [[0.0004861111111, 0.0004486111111, 0.0003644444444, 0.0004888888889, 0.00015625, 1.25e-05, -8.333333333e-06], [0.0004486111111, 0.000573015873, 0.000386031746, 0.0005187301587, 0.0001583333333, 8.142857143e-06, -7.238095238e-06], [0.0003644444444, 0.000386031746, 0.0004063492063, 0.0004215873016, 0.000126984127, 1.371428571e-05, -9.142857143e-06], [0.0004888888889, 0.0005187301587, 0.0004215873016, 0.0006349206349, 0.0001746031746, 1.142857143e-05, -8.571428571e-06], [0.00015625, 0.0001583333333, 0.000126984127, 0.0001746031746, 0.000248015873, 1.785714286e-05, -8.928571429e-06], [1.25e-05, 8.142857143e-06, 1.371428571e-05, 1.142857143e-05, 1.785714286e-05, 0.0001285714286, 8.571428571e-06], [-8.333333333e-06, -7.238095238e-06, -9.142857143e-06, -8.571428571e-06, -8.928571429e-06, 8.571428571e-06, 1.428571429e-05]], "corr": [[1.0, 0.85, 0.82, 0.88, 0.45, 0.05, -0.1], [0.85, 1.0, 0.8, 0.86, 0.42, 0.03, -0.08], [0.82, 0.8, 1.0, 0.83, 0.4, 0.06, -0.12], [0.88, 0.86, 0.83, 1.0, 0.44, 0.04, -0.09], [0.45, 0.42, 0.4, 0.44, 1.0, 0.1, -0.15], [0.05, 0.03, 0.06, 0.04, 0.1, 1.0, 0.2], [-0.1, -0.08, -0.12, -0.09, -0.15, 0.2, 1.0]], "vols": [0.35, 0.38, 0.32, 0.4, 0.25, 0.18, 0.06], "uncertainty": [{"n": 21, "lo": 0.15301, "hi": 0.28881, "rel": 0.3395}, {"n": 63, "lo": 0.17016, "hi": 0.24263, "rel": 0.1812}, {"n": 126, "lo": 0.17798, "hi": 0.22828, "rel": 0.1257}, {"n": 252, "lo": 0.18393, "hi": 0.21917, "rel": 0.0881}, {"n": 504, "lo": 0.18837, "hi": 0.21317, "rel": 0.062}, {"n": 756, "lo": 0.1904, "hi": 0.21062, "rel": 0.0506}, {"n": 1260, "lo": 0.19248, "hi": 0.20813, "rel": 0.0391}, {"n": 2520, "lo": 0.19463, "hi": 0.20568, "rel": 0.0276}, {"n": 5040, "lo": 0.19617, "hi": 0.20398, "rel": 0.0195}], "var": [{"regime": "Loi normale", "param_var": 0.02934, "param_cvar": 0.03361, "hist_var": 0.0294, "hist_cvar": 0.03343, "kurt": 0.03, "pire": -0.04573}, {"regime": "Queues épaisses", "param_var": 0.02888, "param_cvar": 0.0331, "hist_var": 0.03441, "hist_cvar": 0.0444, "kurt": 6.85, "pire": -0.06425}]};
+const J = 252, N = DATA.assets.length, C = DATA.cov;
+const fmtP = (x,d=1)=>(x*100).toFixed(d).replace('.',',')+' %';
+const fmtN = (x,d=2)=>x.toFixed(d).replace('.',',');
+
+/* ---------- algèbre ---------- */
+const mv = (M,v)=>M.map(r=>r.reduce((s,x,j)=>s+x*v[j],0));
+const dot = (a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
+
+/* Jacobi cyclique : valeurs et vecteurs propres d'une matrice symétrique.
+   Nécessaire pour le nombre effectif de paris, qui se calcule dans la base
+   des composantes principales (Meucci 2009). */
+function jacobi(A0){
+  const n=A0.length, A=A0.map(r=>r.slice());
+  let V=Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>i===j?1:0));
+  for(let sweep=0;sweep<60;sweep++){
+    let off=0;
+    for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)off+=A[i][j]*A[i][j];
+    if(off<1e-24) break;
+    for(let p=0;p<n-1;p++)for(let q=p+1;q<n;q++){
+      if(Math.abs(A[p][q])<1e-30) continue;
+      const theta=(A[q][q]-A[p][p])/(2*A[p][q]);
+      const t=Math.sign(theta||1)/(Math.abs(theta)+Math.sqrt(theta*theta+1));
+      const c=1/Math.sqrt(t*t+1), s=t*c;
+      for(let k=0;k<n;k++){
+        const akp=A[k][p], akq=A[k][q];
+        A[k][p]=c*akp-s*akq; A[k][q]=s*akp+c*akq;
+      }
+      for(let k=0;k<n;k++){
+        const apk=A[p][k], aqk=A[q][k];
+        A[p][k]=c*apk-s*aqk; A[q][k]=s*apk+c*aqk;
+      }
+      for(let k=0;k<n;k++){
+        const vkp=V[k][p], vkq=V[k][q];
+        V[k][p]=c*vkp-s*vkq; V[k][q]=s*vkp+c*vkq;
+      }
+    }
+  }
+  return {values:A.map((r,i)=>r[i]), vectors:V};
+}
+
+/* Décomposition du risque — le calcul central.
+   σₚ = √(wᵀΣw) est homogène de degré 1, donc le théorème d'Euler donne
+   σₚ = Σᵢ wᵢ·∂σₚ/∂wᵢ exactement. */
+function decompose(w){
+  const Sw = mv(C,w), varP = dot(w,Sw);
+  const sdDaily = Math.sqrt(varP), ann = Math.sqrt(J);
+  const vol = sdDaily*ann;
+  const marginal = Sw.map(x=>x/sdDaily*ann);
+  const component = w.map((wi,i)=>wi*marginal[i]);
+  const percent = component.map(c=>c/vol);
+  const standalone = C.map((r,i)=>Math.sqrt(r[i]*J));
+  const dr = dot(w,standalone)/vol;
+
+  const {values,vectors} = jacobi(C);
+  let contrib = values.map((lam,k)=>{
+    const wt = w.reduce((s,wi,i)=>s+vectors[i][k]*wi,0);
+    return wt*wt*lam;
+  });
+  const tot = contrib.reduce((a,b)=>a+b,0);
+  let H=0;
+  for(const c of contrib){ const p=c/tot; if(p>1e-15) H-=p*Math.log(p); }
+  return {vol,marginal,component,percent,standalone,dr,enb:Math.exp(H)};
+}
+
+/* Intervalle de confiance sur σ par inversion du chi² (exact sous normalité).
+   Approximation de Wilson-Hilferty pour les quantiles, suffisante à n grand. */
+function chi2inv(p,df){
+  const z = normInv(p), d=2/(9*df);
+  return df*Math.pow(1-d+z*Math.sqrt(d),3);
+}
+function normInv(p){
+  const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,
+           1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+  const b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,
+           6.680131188771972e+01,-1.328068155288572e+01];
+  const c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,
+           -2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+  const d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,
+           3.754408661907416e+00];
+  const pl=0.02425;
+  if(p<pl){const q=Math.sqrt(-2*Math.log(p));
+    return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+  if(p>1-pl){const q=Math.sqrt(-2*Math.log(1-p));
+    return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+  const q=p-0.5,r=q*q;
+  return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/
+         (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);
+}
+function volCI(vol,n){
+  const df=n-1;
+  return [vol*Math.sqrt(df/chi2inv(0.975,df)), vol*Math.sqrt(df/chi2inv(0.025,df))];
+}
+
+/* ---------- pondérations ---------- */
+const EQ = Array(N).fill(1/N);
+
+/* Parité de risque — descente par coordonnées cycliques sur le programme
+   convexe de Spinu : min ½wᵀΣw − (1/N)Σ log wᵢ, w > 0.
+
+   Pour chaque i, la condition du premier ordre est une quadratique en wᵢ :
+       Σᵢᵢ·wᵢ² + b·wᵢ − 1/N = 0,   avec b = Σⱼ≠ᵢ Σᵢⱼ·wⱼ
+   dont la racine positive est unique. Convergence garantie pour toute
+   covariance définie positive, poids strictement positifs par construction.
+
+   Ma première version utilisait une mise à jour multiplicative naïve qui
+   divergeait ici : l'obligation, faiblement volatile et négativement
+   corrélée, faisait exploser le terme en 1/(Σw)ᵢ et produisait des poids
+   négatifs — donc un ratio de diversification inférieur à 1, ce qui est
+   impossible en position longue. Le symptôme a révélé le bug. */
+function riskParity(){
+  let w=Array(N).fill(1/N);
+  for(let it=0;it<500;it++){
+    let diff=0;
+    for(let i=0;i<N;i++){
+      let b=0; for(let j=0;j<N;j++) if(j!==i) b+=C[i][j]*w[j];
+      const a=C[i][i], wi=(-b+Math.sqrt(b*b+4*a/N))/(2*a);
+      diff=Math.max(diff,Math.abs(wi-w[i])); w[i]=wi;
+    }
+    if(diff<1e-14) break;
+  }
+  const s=w.reduce((a,b)=>a+b,0);
+  return w.map(x=>x/s);
+}
+const PRESETS=[
+  {id:"base", nom:"Portefeuille de départ", w:[.15,.15,.15,.15,.15,.15,.10]},
+  {id:"eq",   nom:"Équipondéré",            w:EQ},
+  {id:"tech", nom:"Concentré tech",         w:[.22,.22,.22,.22,.06,.04,.02]},
+  {id:"rp",   nom:"Parité de risque",       w:riskParity()}
+];
+
+let W = PRESETS[0].w.slice(), activePreset="base";
+
+/* ---------- rendu ---------- */
+const $ = s=>document.querySelector(s);
+const SVGNS="http://www.w3.org/2000/svg";
+const el=(t,a={})=>{const n=document.createElementNS(SVGNS,t);
+  for(const k in a) n.setAttribute(k,a[k]); return n;};
+
+const tip=$("#tip");
+function showTip(e,html){tip.innerHTML=html;tip.style.opacity=1;moveTip(e);}
+function moveTip(e){
+  const r=tip.getBoundingClientRect();
+  let x=e.clientX+14, y=e.clientY+14;
+  if(x+r.width>innerWidth-8) x=e.clientX-r.width-14;
+  if(y+r.height>innerHeight-8) y=e.clientY-r.height-14;
+  tip.style.left=x+"px"; tip.style.top=y+"px";
+}
+function hideTip(){tip.style.opacity=0;}
+function hoverable(node,html){
+  node.addEventListener("mouseenter",e=>showTip(e,html));
+  node.addEventListener("mousemove",moveTip);
+  node.addEventListener("mouseleave",hideTip);
+}
+
+function buildPresets(){
+  const box=$("#presets");
+  PRESETS.forEach(p=>{
+    const b=document.createElement("button");
+    b.textContent=p.nom; b.type="button";
+    b.setAttribute("aria-pressed", p.id===activePreset);
+    b.onclick=()=>{W=p.w.slice();activePreset=p.id;syncSliders();render();
+      [...box.children].forEach((c,i)=>c.setAttribute("aria-pressed",PRESETS[i].id===p.id));};
+    box.appendChild(b);
+  });
+}
+function buildSliders(){
+  const box=$("#sliders");
+  DATA.assets.forEach((a,i)=>{
+    const d=document.createElement("div"); d.className="slider";
+    d.innerHTML=`<div class="row"><label for="w${i}">${a}</label>
+      <span class="pct" id="p${i}"></span></div>
+      <input type="range" id="w${i}" min="0" max="60" step="1">`;
+    box.appendChild(d);
+    d.querySelector("input").addEventListener("input",ev=>{
+      const raw=W.map((x,k)=>k===i?+ev.target.value/100:x);
+      const others=raw.reduce((s,x,k)=>k===i?s:s+x,0);
+      const target=Math.min(+ev.target.value/100,0.95);
+      W = others>0 ? raw.map((x,k)=>k===i?target:x*(1-target)/others)
+                   : raw.map((x,k)=>k===i?1:0);
+      activePreset=null;
+      [...$("#presets").children].forEach(c=>c.setAttribute("aria-pressed",false));
+      syncSliders(i); render();
+    });
+  });
+}
+function syncSliders(skip=-1){
+  W.forEach((w,i)=>{
+    if(i!==skip) document.getElementById("w"+i).value=Math.round(w*100);
+    document.getElementById("p"+i).textContent=fmtP(w,1);
+  });
+  $("#total").textContent=fmtP(W.reduce((a,b)=>a+b,0),1);
+}
+
+function drawBars(d){
+  const svg=$("#bars"); svg.textContent="";
+  const W0=640,H=310,L=96,R=52,T=18,B=26;
+  const iw=W0-L-R, rowH=(H-T-B)/N;
+  const maxV=Math.max(...d.percent,...W,0.05)*1.12;
+  const x=v=>L+Math.max(0,v)/maxV*iw;
+
+  for(let t=0;t<=4;t++){
+    const v=maxV*t/4, px=x(v);
+    svg.appendChild(el("line",{x1:px,y1:T,x2:px,y2:H-B,class:"grid"}));
+    const tx=el("text",{x:px,y:H-B+15,"text-anchor":"middle"});
+    tx.setAttribute("class","val"); tx.textContent=fmtP(v,0); svg.appendChild(tx);
+  }
+  svg.appendChild(el("line",{x1:L,y1:T,x2:L,y2:H-B,class:"axis"}));
+
+  DATA.assets.forEach((nom,i)=>{
+    const y0=T+i*rowH, bh=Math.min(9,rowH/3.4), gap=3;
+    const nt=el("text",{x:L-10,y:y0+rowH/2+4,"text-anchor":"end"});
+    nt.setAttribute("class","name"); nt.textContent=nom; svg.appendChild(nt);
+
+    const yc=y0+rowH/2-bh-gap/2, yr=y0+rowH/2+gap/2;
+    const wc=Math.max(1,x(W[i])-L), neg=d.percent[i]<0;
+    const wr=Math.max(1,x(Math.abs(d.percent[i]))-L);
+
+    const b1=el("rect",{x:L,y:yc,width:wc,height:bh,rx:3,
+      fill:"var(--capital)",class:"bar"});
+    svg.appendChild(b1);
+    const b2=el("rect",{x:L,y:yr,width:wr,height:bh,rx:3,
+      fill:neg?"var(--neg)":"var(--risque)",class:"bar",
+      opacity:neg?0.45:1});
+    svg.appendChild(b2);
+
+    const t1=`<b>${nom}</b><br>Capital : <b>${fmtP(W[i],1)}</b>`;
+    const t2=`<b>${nom}</b><br>Part du risque : <b>${fmtP(d.percent[i],1)}</b>`
+      +`<br>Contribution marginale : <b>${fmtP(d.marginal[i],1)}</b>`
+      +(neg?"<br>Négative : en acheter davantage réduirait le risque total.":"");
+    hoverable(b1,t1); hoverable(b2,t2);
+
+    const lbl=el("text",{x:Math.max(x(Math.abs(d.percent[i])),x(W[i]))+7,
+      y:y0+rowH/2+4,"text-anchor":"start"});
+    lbl.setAttribute("class","val");
+    lbl.setAttribute("fill", neg?"var(--ink-muted)":"var(--ink-2)");
+    lbl.textContent=fmtP(d.percent[i],1);
+    svg.appendChild(lbl);
+  });
+}
+
+function drawUnc(){
+  const svg=$("#unc"); svg.textContent="";
+  const W0=640,H=300,L=62,R=58,T=16,B=34;
+  const rows=DATA.uncertainty, iw=W0-L-R, rowH=(H-T-B)/rows.length;
+  const lo=0.12, hi=0.34;
+  const x=v=>L+(v-lo)/(hi-lo)*iw;
+  const LBL={21:"1 mois",63:"3 mois",126:"6 mois",252:"1 an",504:"2 ans",
+             756:"3 ans",1260:"5 ans",2520:"10 ans",5040:"20 ans"};
+
+  [0.15,0.20,0.25,0.30].forEach(v=>{
+    svg.appendChild(el("line",{x1:x(v),y1:T,x2:x(v),y2:H-B,class:"grid"}));
+    const t=el("text",{x:x(v),y:H-B+15,"text-anchor":"middle"});
+    t.setAttribute("class","val"); t.textContent=fmtP(v,0); svg.appendChild(t);
+  });
+  svg.appendChild(el("line",{x1:x(0.20),y1:T,x2:x(0.20),y2:H-B,
+    stroke:"var(--baseline)","stroke-width":1.5,"stroke-dasharray":"3 3"}));
+  const vt=el("text",{x:x(0.20),y:T-3,"text-anchor":"middle"});
+  vt.setAttribute("class","val"); vt.setAttribute("fill","var(--ink-muted)");
+  vt.textContent="vraie valeur"; svg.appendChild(vt);
+
+  rows.forEach((r,i)=>{
+    const y=T+i*rowH+rowH/2;
+    const t=el("text",{x:L-10,y:y+4,"text-anchor":"end"});
+    t.setAttribute("class","name"); t.textContent=LBL[r.n]||r.n; svg.appendChild(t);
+
+    const fiable=r.rel<=0.25;
+    const col=fiable?"var(--capital)":"var(--warn)";
+    const bar=el("rect",{x:x(r.lo),y:y-5,width:Math.max(2,x(r.hi)-x(r.lo)),
+      height:10,rx:3,fill:col,opacity:.9,class:"bar"});
+    svg.appendChild(bar);
+    svg.appendChild(el("circle",{cx:x(0.20),cy:y,r:2.6,fill:"var(--surface)",
+      stroke:"var(--ink)","stroke-width":1.4}));
+
+    hoverable(bar,`<b>${LBL[r.n]||r.n}</b> — ${r.n} observations<br>`
+      +`Intervalle : <b>${fmtP(r.lo,1)} — ${fmtP(r.hi,1)}</b><br>`
+      +`Imprécision relative : <b>±${fmtP(r.rel,1)}</b>`
+      +(fiable?"":"<br>Trop imprécis : le moteur refuse de publier ce chiffre."));
+
+    const lab=el("text",{x:x(r.hi)+7,y:y+4,"text-anchor":"start"});
+    lab.setAttribute("class","val");
+    lab.setAttribute("fill",fiable?"var(--ink-2)":"var(--ink-muted)");
+    lab.textContent="±"+fmtP(r.rel,0);
+    svg.appendChild(lab);
+  });
+}
+
+function drawHeat(){
+  const t=$("#heat"); t.textContent="";
+  const short=["T·A","T·B","T·C","T·D","Banque","Or","Oblig."];
+  const head=document.createElement("tr");
+  head.innerHTML="<th></th>"+short.map(s=>`<th class="v">${s}</th>`).join("");
+  t.appendChild(head);
+  DATA.corr.forEach((row,i)=>{
+    const tr=document.createElement("tr");
+    const th=document.createElement("th");
+    th.textContent=short[i]; th.style.textAlign="right"; tr.appendChild(th);
+    row.forEach((v,j)=>{
+      const td=document.createElement("td");
+      td.textContent=i===j?"—":fmtN(v,2);
+      if(i===j){ td.className="self"; td.style.background="var(--surface-2)"; }
+      else{
+        const a=Math.min(1,Math.abs(v)/1.0);
+        td.style.background = v>=0
+          ? `color-mix(in oklab, var(--pos) ${18+a*70}%, var(--mid))`
+          : `color-mix(in oklab, var(--neg) ${18+a*70}%, var(--mid))`;
+        if(a>0.55) td.style.color="#fff";
+        td.style.boxShadow="inset 0 0 0 1px var(--ring)";
+        hoverable(td,`<b>${DATA.assets[i]}</b> ↔ <b>${DATA.assets[j]}</b><br>`
+          +`Corrélation : <b>${fmtN(v,2)}</b>`
+          +(v>0.7?"<br>Très élevée : ces deux lignes forment un seul pari.":""));
+      }
+      tr.appendChild(td);
+    });
+    t.appendChild(tr);
+  });
+}
+
+function drawVar(){
+  const b=$("#varBody"); b.textContent="";
+  DATA.var.forEach(r=>{
+    const ratio=r.hist_cvar/r.hist_var;
+    const lourd=ratio>1.25;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${r.regime}</td>
+      <td class="n">${fmtN(r.kurt,2)}</td>
+      <td class="n">${fmtP(r.pire,2)}</td>
+      <td class="n">${fmtP(r.param_var,2)}</td>
+      <td class="n">${fmtP(r.hist_var,2)}</td>
+      <td class="n">${fmtP(r.hist_cvar,2)}</td>
+      <td class="n"><span class="pill" style="color:${lourd?'var(--crit)':'var(--good)'};
+        border-color:${lourd?'var(--crit)':'var(--good)'}">${fmtN(ratio,2)}</span></td>`;
+    b.appendChild(tr);
+  });
+}
+
+function render(){
+  const d=decompose(W);
+  const [lo,hi]=volCI(d.vol,2016);
+  $("#volBig").textContent=fmtP(d.vol,2);
+  $("#volCi").textContent=`IC 95 % : ${fmtP(lo,2)} — ${fmtP(hi,2)}`;
+  $("#dr").textContent=fmtN(d.dr,2);
+  $("#enb").textContent=fmtN(d.enb,1);
+  $("#enbNote").textContent =
+    `Sur ${N} positions. Compte les sources de risque indépendantes, pas les lignes.`;
+
+  const tech=d.percent.slice(0,4).reduce((a,b)=>a+b,0);
+  const cap=W.slice(0,4).reduce((a,b)=>a+b,0);
+  $("#techRisk").textContent=fmtP(tech,0);
+  $("#techNote").textContent=`Pour ${fmtP(cap,0)} du capital engagé.`;
+
+  const tb=$("#tbody"); tb.textContent="";
+  DATA.assets.forEach((a,i)=>{
+    const neg=d.percent[i]<0;
+    const col = neg?"var(--capital)" : d.percent[i]>0.20?"var(--crit)"
+              : d.percent[i]>0.10?"var(--warn)":"var(--good)";
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td><i class="flag" style="background:${col}"></i>${a}</td>
+      <td class="n">${fmtP(W[i],1)}</td>
+      <td class="n">${fmtP(d.standalone[i],1)}</td>
+      <td class="n">${fmtP(d.marginal[i],1)}</td>
+      <td class="n">${fmtP(d.component[i],2)}</td>
+      <td class="n">${fmtP(d.percent[i],1)}</td>`;
+    tb.appendChild(tr);
+  });
+  const sum=d.component.reduce((a,b)=>a+b,0);
+  const tr=document.createElement("tr"); tr.className="sum";
+  tr.innerHTML=`<td>Total</td><td class="n">${fmtP(W.reduce((a,b)=>a+b,0),1)}</td>
+    <td></td><td></td><td class="n">${fmtP(sum,2)}</td><td class="n">100,0 %</td>`;
+  tb.appendChild(tr);
+
+  $("#euler").innerHTML =
+    `Somme des contributions composantes : <span class="num">${(sum*100).toFixed(6).replace('.',',')} %</span> · `
+    + `volatilité du portefeuille : <span class="num">${(d.vol*100).toFixed(6).replace('.',',')} %</span>. `
+    + `Écart : <span class="num">${Math.abs(sum-d.vol).toExponential(1)}</span>, soit la précision machine. `
+    + `Ce n'est pas une approximation mais le théorème d'Euler sur les fonctions homogènes de degré 1 — `
+    + `le moteur lève une exception si l'égalité est violée, parce que ce serait la preuve d'un bug en amont.`;
+
+  drawBars(d);
+}
+
+buildPresets(); buildSliders(); syncSliders(); drawUnc(); drawHeat(); drawVar(); render();
+</script>
+
+</body>
+</html>
