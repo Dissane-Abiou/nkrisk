@@ -16,13 +16,15 @@ Quand une implémentation de référence existe, s'en priver est une faute.
 
 from __future__ import annotations
 
+import itertools
+
 import numpy as np
 import pandas as pd
 import pytest
 
-from nkrisk.covariance import CovarianceEstimate, ledoit_wolf, sample_covariance
+from nkrisk.covariance import ledoit_wolf, sample_covariance
 from nkrisk.data import GBMSpec, generate_correlated_prices
-from nkrisk.returns import log_returns, simple_returns
+from nkrisk.returns import simple_returns
 from nkrisk.risk import (
     decompose_risk,
     effective_number_of_bets,
@@ -86,7 +88,7 @@ def test_shrinkage_augmente_quand_les_donnees_se_rarefient():
         ledoit_wolf(_returns(30, t, seed=4)).shrinkage
         for t in (2000, 1000, 500, 250, 100)
     ]
-    for precedent, suivant in zip(deltas, deltas[1:]):
+    for precedent, suivant in itertools.pairwise(deltas):
         assert suivant >= precedent - 1e-9, f"non monotone : {deltas}"
 
 
@@ -123,7 +125,7 @@ def test_le_conditionnement_se_degrade_avec_n_sur_t():
         sample_covariance(_returns(n, 120, seed=7)).condition_number
         for n in (40, 70, 100, 118)
     ]
-    for precedent, suivant in zip(conds, conds[1:]):
+    for precedent, suivant in itertools.pairwise(conds):
         assert suivant > precedent, f"conditionnement non croissant : {conds}"
 
     # La pathologie ne mord vraiment que quand N/T approche 1. À N/T=0.33
@@ -226,11 +228,13 @@ def test_enb_decroit_quand_la_correlation_monte():
         np.fill_diagonal(sigma, sd**2)
         valeurs.append(effective_number_of_bets(w, sigma))
 
-    for precedent, suivant in zip(valeurs, valeurs[1:]):
+    for precedent, suivant in itertools.pairwise(valeurs):
         assert suivant <= precedent + 1e-9, f"non monotone : {valeurs}"
 
-    assert valeurs[0] > 4.0, f"décorrélé devrait donner plusieurs paris : {valeurs[0]:.2f}"
-    assert valeurs[-1] < 1.05, f"quasi parfaitement corrélé → 1 pari : {valeurs[-1]:.2f}"
+    assert valeurs[0] > 4.0, (
+        f"décorrélé devrait donner plusieurs paris : {valeurs[0]:.2f}")
+    assert valeurs[-1] < 1.05, (
+        f"quasi parfaitement corrélé → 1 pari : {valeurs[-1]:.2f}")
 
 
 def test_actifs_independants_donnent_n_paris():

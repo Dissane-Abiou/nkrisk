@@ -1,5 +1,9 @@
 # nkrisk
 
+[![CI](https://github.com/Dissane-Abiou/nkrisk/actions/workflows/ci.yml/badge.svg)](https://github.com/Dissane-Abiou/nkrisk/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/Dissane-Abiou/nkrisk)
+[![Licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+
 **Moteur de mesure de risque de portefeuille qui déclare son incertitude.**
 
 Aucune fonction ne retourne un nombre nu. Chaque estimation transporte son
@@ -32,8 +36,10 @@ sans avertissement.
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -q          # 41 tests rapides (~2 s)
-pytest tests/ -q -m ""    # 47 tests, dont couverture Monte Carlo (~30 s)
+pytest tests/ -q          # 92 tests rapides (~3 s)
+pytest tests/ -q -m ""    # 97 tests, couverture Monte Carlo incluse (~10 s)
+ruff check src/ tests/ examples/
+mypy src/nkrisk
 ```
 
 Python ≥ 3.11 · numpy · pandas · scipy · scikit-learn (optionnel, pour une
@@ -49,6 +55,9 @@ validation croisée)
 | `covariance` | covariance empirique et contraction de Ledoit-Wolf, avec diagnostic de conditionnement |
 | `risk` | décomposition du risque : contributions marginale et composante, ratio de diversification, nombre effectif de paris |
 | `var` | VaR et CVaR par trois méthodes, backtest de Kupiec, contre-exemple de sous-additivité |
+| `drawdown` | courbe sous l'eau, épisodes datés, indice d'ulcère, Calmar, distribution simulée du maximum |
+| `portfolio` | objet valeur gelé : poids + modèle de risque, validés une seule fois à la construction |
+| `stress` | moteur de scénarios — tout choc est une fonction Portefeuille → Portefeuille |
 | `data` | générateurs synthétiques à vérité connue (GBM, Student-t corrélés) + chargeurs Yahoo/CSV |
 
 ---

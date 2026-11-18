@@ -1,0 +1,89 @@
+# Intégration continue de nkrisk.
+#
+# Trois travaux, dans un ordre choisi : le moins cher d'abord, pour qu'une
+# faute de style n'attende pas trois minutes de tests pour être signalée.
+#
+#   1. qualité   — ruff + mypy, une seule version de Python, ~20 s
+#   2. tests     — suite rapide sur trois versions, en parallèle, ~1 min
+#   3. complet   — suite entière avec les tests lents, sur main seulement
+#
+# Pourquoi séparer rapide et complet : les tests de couverture Monte Carlo
+# lancent mille simulations chacun et doivent appeler l'API publique à
+# chaque itération — les vectoriser reviendrait à tester une
+# réimplémentation. Ils restent donc lents par nécessité, marqués `slow`,
+# exclus des exécutions de branche et obligatoires avant fusion.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Annule les exécutions précédentes sur la même branche : pousser trois
+# fois d'affilée ne doit pas occuper trois exécuteurs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualite:
+    name: Lint et types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Installer
+        run: pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check src/ tests/ examples/
+      - name: Mypy
+        run: mypy src/nkrisk
+
+  tests:
+    name: Tests rapides (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false   # on veut savoir si UNE seule version casse
+      matrix:
+        # pyproject déclare requires-python >= 3.11 : la matrice doit
+        # couvrir ce que le paquet promet, sinon la promesse n'est pas tenue.
+        # Ajouter "3.14" une fois les roues numpy/pandas confirmées.
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Installer
+        run: pip install -e ".[dev]"
+      - name: Suite rapide
+        run: pytest tests/ -q
+
+  complet:
+    name: Suite complète et couverture
+    runs-on: ubuntu-latest
+    needs: [qualite, tests]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Installer
+        run: pip install -e ".[dev]"
+      - name: Suite complète, tests lents inclus
+        run: pytest tests/ -m "" --cov=src/nkrisk --cov-report=term-missing
+      - name: Résumé de couverture
+        if: always()
+        run: |
+          echo "### Couverture" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          coverage report >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

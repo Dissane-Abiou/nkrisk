@@ -26,6 +26,21 @@ from .var import (
     kupiec_test,
     subadditivity_counterexample,
 )
+from .portfolio import Portfolio, equal_weighted
+from .stress import (
+    Shock, VolatilityShock, CorrelationShock, PriceShock, Combined,
+    StressResult, stress, stress_table,
+    CRISE_2008, CHOC_LIQUIDITE, HAUSSE_TAUX, DECORRELATION, SCENARIOS_STANDARD,
+)
+from .drawdown import (
+    DrawdownEpisode,
+    drawdown_curve,
+    max_drawdown,
+    drawdown_episodes,
+    ulcer_index,
+    calmar_ratio,
+    expected_max_drawdown,
+)
 from .risk import (
     RiskDecomposition,
     decompose_risk,
@@ -62,4 +77,16 @@ __all__ = [
     "cornish_fisher_var",
     "kupiec_test",
     "subadditivity_counterexample",
+    "DrawdownEpisode",
+    "drawdown_curve",
+    "max_drawdown",
+    "drawdown_episodes",
+    "ulcer_index",
+    "calmar_ratio",
+    "expected_max_drawdown",
+    "Portfolio", "equal_weighted",
+    "Shock", "VolatilityShock", "CorrelationShock", "PriceShock", "Combined",
+    "StressResult", "stress", "stress_table",
+    "CRISE_2008", "CHOC_LIQUIDITE", "HAUSSE_TAUX", "DECORRELATION",
+    "SCENARIOS_STANDARD",
 ]

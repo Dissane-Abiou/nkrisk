@@ -168,7 +168,7 @@ def sample_covariance(returns: pd.DataFrame) -> CovarianceEstimate:
     point l'alternative est cassée.
     """
     x = _validate(returns)
-    n_obs, n_assets = x.shape
+    n_obs, _n_assets = x.shape
     # rowvar=False : les colonnes sont les variables, les lignes les
     # observations. Inverser les deux est une erreur classique qui
     # produit une matrice de la mauvaise taille — ou pire, de la bonne

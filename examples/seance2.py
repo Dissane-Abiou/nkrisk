@@ -92,9 +92,9 @@ print("    Il trouve les directions où la covariance est le plus mal")
 print("    estimée, et s'y engouffre. Les petites valeurs propres, les plus")
 print("    biaisées, deviennent d'énormes valeurs propres après inversion.")
 print("\n  → C'est la version rigoureuse du surnom de Michaud (1989) :")
-print(f"    « error maximizer ». Ici la contraction divise le levier par")
+print("    « error maximizer ». Ici la contraction divise le levier par")
 print(f"    {_ratios[0]:.1f} à {_ratios[-1]:.1f} selon N/T — et le facteur")
-print(f"    continue de croître au-delà de N/T = 0,92.")
+print("    continue de croître au-delà de N/T = 0,92.")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -108,10 +108,10 @@ print(f"    {'-'*5}{'-'*7}{'-'*7}{'-'*9}{'-'*14}{'-'*13}")
 
 for n, t in [(20, 2000), (20, 250), (50, 250), (100, 120), (60, 40)]:
     r = marche(n, t, seed=42)
-    e, l = sample_covariance(r), ledoit_wolf(r)
-    ce = "singulière" if not e.is_invertible else f"{e.condition_number:,.0f}"
-    print(f"    {n:>5}{t:>7}{n/t:>7.2f}{l.shrinkage:>9.1%}{ce:>14}"
-          f"{l.condition_number:>13,.0f}")
+    emp, lw = sample_covariance(r), ledoit_wolf(r)
+    ce = "singulière" if not emp.is_invertible else f"{emp.condition_number:,.0f}"
+    print(f"    {n:>5}{t:>7}{n/t:>7.2f}{lw.shrinkage:>9.1%}{ce:>14}"
+          f"{lw.condition_number:>13,.0f}")
 
 print("\n  → Quand les données abondent, δ est faible : on garde l'empirique.")
 print("    Quand elles se raréfient, δ monte : on se réfugie sur la cible.")
@@ -136,7 +136,7 @@ corr = np.array([
     [0.05, 0.03, 0.06, 0.04, 0.10, 1.00, 0.20],
     [-0.10, -0.08, -0.12, -0.09, -0.15, 0.20, 1.00],
 ])
-specs = {n: GBMSpec(mu=0.08, sigma=float(v)) for n, v in zip(noms, vols)}
+specs = {n: GBMSpec(mu=0.08, sigma=float(v)) for n, v in zip(noms, vols, strict=True)}
 prix = generate_correlated_prices(specs, corr, 252 * 8, seed=2024)
 cov = ledoit_wolf(simple_returns(prix))
 
@@ -163,12 +163,12 @@ tech = tbl.loc[[n for n in noms if n.startswith("TECH")], "% du risque"].sum()
 cap_tech = tbl.loc[[n for n in noms if n.startswith("TECH")], "poids"].sum()
 print(f"\n  → Les quatre lignes tech pèsent {cap_tech:.0%} du capital")
 print(f"    mais {tech:.0%} du risque.")
-print(f"\n  → L'obligation pèse 10 % du capital et une contribution")
-print(f"    marginale NÉGATIVE : en acheter davantage RÉDUIRAIT le risque")
-print(f"    total, malgré sa volatilité propre non nulle. C'est l'effet de")
-print(f"    corrélation négative, invisible sans cette décomposition.")
+print("\n  → L'obligation pèse 10 % du capital et une contribution")
+print("    marginale NÉGATIVE : en acheter davantage RÉDUIRAIT le risque")
+print("    total, malgré sa volatilité propre non nulle. C'est l'effet de")
+print("    corrélation négative, invisible sans cette décomposition.")
 print(f"\n  → Nombre effectif de paris : {d.effective_bets:.1f} pour 7 lignes.")
-print(f"    Tu crois détenir sept positions. Tu détiens à peu près")
+print("    Tu crois détenir sept positions. Tu détiens à peu près")
 print(f"    {round(d.effective_bets)} pari indépendant.")
 
 print("\n  ⚠️  La somme des contributions vaut EXACTEMENT la volatilité du")

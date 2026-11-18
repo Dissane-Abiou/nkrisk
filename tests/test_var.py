@@ -13,6 +13,8 @@ Si tu ne retiens qu'une méthode de tout ce projet, retiens celle-là.
 
 from __future__ import annotations
 
+import itertools
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -66,7 +68,7 @@ def test_var_croit_avec_le_niveau_de_confiance():
     """Une VaR à 99 % doit dépasser une VaR à 95 %, qui dépasse celle à 90 %."""
     r = _normal(3000, seed=2)
     vars_ = [historical_var(r, confidence=c).var for c in (0.90, 0.95, 0.99)]
-    for precedent, suivant in zip(vars_, vars_[1:]):
+    for precedent, suivant in itertools.pairwise(vars_):
         assert suivant > precedent, f"non monotone : {vars_}"
 
 
@@ -162,7 +164,7 @@ def test_le_penalite_de_queue_epaisse_croit_avec_le_niveau():
         rapports.append(q_t / q_norm)
 
     # Le rapport croît strictement avec le niveau de confiance
-    for precedent, suivant in zip(rapports, rapports[1:]):
+    for precedent, suivant in itertools.pairwise(rapports):
         assert suivant > precedent, f"non monotone : {rapports}"
 
     # Aux niveaux usuels, la queue épaisse est TROMPEUSEMENT rassurante

@@ -8,7 +8,6 @@ au monde est dangereuse.
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 from scipy import stats
 
 from nkrisk.data import (
@@ -165,8 +164,8 @@ print("  (valeurs pré-calculées : la mesure prend ~3 minutes ; le script de")
 print("   reproduction est dans le dépôt sous examples/puissance_kupiec.py)\n")
 print(f"    {'niveau':>9}{'jours':>8}{'paramétrique':>16}{'historique':>14}")
 print(f"    {'-'*9}{'-'*8}{'-'*16}{'-'*14}")
-for conf, T, rp, rh in [(0.99, 1500, 85, 200), (0.99, 5000, 171, 200),
-                        (0.995, 5000, 194, 200), (0.999, 5000, 200, 200)]:
+for conf, T, rp, _ in [(0.99, 1500, 85, 200), (0.99, 5000, 171, 200),
+                       (0.995, 5000, 194, 200), (0.999, 5000, 200, 200)]:
     hist = {1500: 37, 5000: 34}[T] if conf == 0.99 else (28 if conf == 0.995 else 36)
     print(f"    {conf:>9.3f}{T:>8}{f'{rp}/200 ({rp/2:.0f}%)':>16}"
           f"{f'{hist}/200':>14}")

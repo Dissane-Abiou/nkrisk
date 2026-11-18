@@ -49,7 +49,6 @@ from nkrisk import (
 )
 from nkrisk.data import GBMSpec, generate_prices
 
-
 # ══════════════════════════════════════════════════════════════════════
 #  NIVEAU 1 — PROPRIÉTÉS MATHÉMATIQUES
 # ══════════════════════════════════════════════════════════════════════
@@ -59,8 +58,8 @@ def test_les_deux_rendements_sont_coherents():
     """r = e^l - 1 doit tenir exactement, à la précision machine près."""
     prices = generate_prices(GBMSpec(mu=0.08, sigma=0.20), n_days=500, seed=1)
     r = simple_returns(prices)
-    l = log_returns(prices)
-    np.testing.assert_allclose(r.to_numpy(), np.expm1(l.to_numpy()), rtol=1e-12)
+    lg = log_returns(prices)
+    np.testing.assert_allclose(r.to_numpy(), np.expm1(lg.to_numpy()), rtol=1e-12)
 
 
 def test_rendements_log_additifs_dans_le_temps():
@@ -69,8 +68,8 @@ def test_rendements_log_additifs_dans_le_temps():
     La somme des log-rendements doit égaler le log du rendement total.
     """
     prices = generate_prices(GBMSpec(mu=0.10, sigma=0.25), n_days=1000, seed=2)
-    l = log_returns(prices)
-    somme = float(l.sum())
+    lg = log_returns(prices)
+    somme = float(lg.sum())
     total = float(np.log(prices.iloc[-1] / prices.iloc[0]))
     assert abs(somme - total) < 1e-10
 
@@ -198,6 +197,51 @@ def test_trainee_de_volatilite_est_reelle():
 
 
 @pytest.mark.slow
+def _trajectoires(mu: float, sigma: float, n_days: int, seeds: range
+                  ) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Oracle vectorisé : rendements géométriques et arithmétiques annualisés
+    pour un lot de trajectoires.
+
+    Même motif que `_mdd_rapide` dans test_drawdown.py. La version
+    d'origine appelait `generate_prices` 400 fois, chacune construisant
+    une `pd.Series` de 7 561 points avec son index de dates ouvrables :
+    14,3 secondes, dont l'essentiel en allocation pandas.
+
+    Reproduit exactement le modèle de `GBMSpec` : rendements log normaux
+    de moyenne (μ − σ²/2)/252 et d'écart-type σ/√252, série démarrant à
+    s0 avant le premier rendement. La concordance avec l'API publique est
+    vérifiée par le test suivant — sans quoi cet oracle ne prouverait rien.
+    """
+    J = 252
+    m = (mu - 0.5 * sigma**2) / J
+    sd = sigma / np.sqrt(J)
+
+    lignes = np.array([
+        np.random.default_rng(s).normal(m, sd, n_days) for s in seeds])
+    log_eq = np.cumsum(lignes, axis=1)
+
+    # géométrique : (P_fin / P_début)^(252/n) − 1
+    geo = np.exp(log_eq[:, -1] * (J / n_days)) - 1.0
+
+    # arithmétique : moyenne des rendements SIMPLES, annualisée par composition
+    eq = np.concatenate([np.ones((len(lignes), 1)), np.exp(log_eq)], axis=1)
+    simples = eq[:, 1:] / eq[:, :-1] - 1.0
+    ari = (1.0 + simples.mean(axis=1)) ** J - 1.0
+    return geo, ari
+
+
+def test_loracle_de_trajectoires_concorde_avec_lapi():
+    """Condition de validité du test suivant."""
+    geo, ari = _trajectoires(0.08, 0.20, 252 * 3, range(900, 906))
+    for i, seed in enumerate(range(900, 906)):
+        p = generate_prices(GBMSpec(mu=0.08, sigma=0.20),
+                            n_days=252 * 3, seed=seed)
+        assert abs(geo[i] - geometric_return(p)) < 1e-12
+        attendu = compound_annualize(float(np.mean(simple_returns(p))))
+        assert abs(ari[i] - attendu) < 1e-12
+
+
 def test_trainee_positive_meme_a_faible_volatilite():
     """
     ★ TEST DE NON-RÉGRESSION D'UN BUG RÉEL ★
@@ -211,31 +255,20 @@ def test_trainee_positive_meme_a_faible_volatilite():
     Résultat : la traînée sortait NÉGATIVE. Le tableau démontrait
     l'inverse de la réalité, sans qu'aucune exception ne soit levée.
 
-    Aucun de mes autres tests ne l'attrapait, parce qu'ils utilisaient
-    tous σ ≥ 20 %, régime où l'effet réel (2 pts) écrase l'artefact.
-
-    Ce test verrouille le régime dangereux : faible volatilité, où le bug
-    de convention domine. La traînée doit être POSITIVE et proche de σ²/2.
+    Aucun autre test ne l'attrapait : ils utilisaient tous σ ≥ 20 %,
+    régime où l'effet réel écrase l'artefact. Ce test verrouille le
+    régime dangereux — faible volatilité, où le bug de convention domine.
     """
     for sigma in (0.05, 0.10):
-        geos, aris = [], []
-        for seed in range(200):
-            p = generate_prices(
-                GBMSpec(mu=0.08, sigma=sigma), n_days=252 * 30, seed=seed + 900
-            )
-            geos.append(geometric_return(p))
-            aris.append(compound_annualize(float(np.mean(simple_returns(p)))))
-
-        trainee = float(np.mean(aris)) - float(np.mean(geos))
+        geo, ari = _trajectoires(0.08, sigma, 252 * 30, range(900, 1100))
+        trainee = float(ari.mean() - geo.mean())
         attendu = sigma**2 / 2
 
         assert trainee > 0, (
             f"σ={sigma:.0%} : traînée = {trainee:.4%}, devrait être positive. "
-            f"Regarde si les deux rendements sont annualisés de la même façon."
-        )
+            f"Regarde si les deux rendements sont annualisés de la même façon.")
         assert abs(trainee - attendu) < 0.004, (
-            f"σ={sigma:.0%} : traînée = {trainee:.4%}, attendue ≈ {attendu:.4%}"
-        )
+            f"σ={sigma:.0%} : traînée = {trainee:.4%}, attendue ≈ {attendu:.4%}")
 
 
 def test_les_deux_annualisations_different_de_facon_mesurable():

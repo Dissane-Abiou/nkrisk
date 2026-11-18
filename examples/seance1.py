@@ -13,13 +13,12 @@ import numpy as np
 
 from nkrisk import (
     annualized_mean_return,
-    compound_annualize,
     annualized_volatility,
+    compound_annualize,
     geometric_return,
     log_returns,
     sharpe_ratio,
     simple_returns,
-    volatility_drag,
 )
 from nkrisk.data import GBMSpec, generate_prices
 
@@ -35,16 +34,16 @@ prix = generate_prices(GBMSpec(mu=0.08, sigma=0.20), n_days=252 * 10, seed=7)
 r_simple = simple_returns(prix)
 r_log = log_returns(prix)
 
-print(f"\n  Sur un jour, l'écart est invisible :")
+print("\n  Sur un jour, l'écart est invisible :")
 print(f"    rendement simple du jour 1 : {r_simple.iloc[0]:+.6f}")
 print(f"    rendement log    du jour 1 : {r_log.iloc[0]:+.6f}")
 print(f"    écart                      : {abs(r_simple.iloc[0]-r_log.iloc[0]):.2e}")
 
-print(f"\n  Sur 10 ans, l'écart devient énorme :")
+print("\n  Sur 10 ans, l'écart devient énorme :")
 print(f"    somme des rendements simples : {r_simple.sum():+.2%}  ← FAUX")
 print(f"    somme des rendements log     : {r_log.sum():+.2%}")
 print(f"    performance réellement subie : {prix.iloc[-1]/prix.iloc[0]-1:+.2%}")
-print(f"\n  → Additionner des rendements simples dans le temps est un BUG.")
+print("\n  → Additionner des rendements simples dans le temps est un BUG.")
 print(f"    exp(somme des log) = {np.exp(r_log.sum())-1:+.2%}  ← correct")
 
 
@@ -61,14 +60,14 @@ print(f"      → imprécision relative : {vol.relative_uncertainty:.1%}")
 print(f"\n    Rendement moyen annuel : {moy.format(2, percent=True)}")
 print(f"      → imprécision relative : {moy.relative_uncertainty:.1%}")
 
-print(f"\n  → Avec DIX ANS de données, l'intervalle sur le rendement espéré")
+print("\n  → Avec DIX ANS de données, l'intervalle sur le rendement espéré")
 print(f"    est {moy.relative_uncertainty/vol.relative_uncertainty:.0f}× plus large,")
-print(f"    en relatif, que celui sur la volatilité.")
-print(f"    Et il contient probablement zéro. Vérifions :")
+print("    en relatif, que celui sur la volatilité.")
+print("    Et il contient probablement zéro. Vérifions :")
 print(f"      borne basse du rendement : {moy.ci_low:+.2%}")
 print(f"      contient zéro ? {'OUI' if moy.ci_low < 0 < moy.ci_high else 'non'}")
-print(f"\n  C'est LA raison pour laquelle un logiciel qui prédit quoi acheter")
-print(f"  s'appuie sur une quantité que personne ne sait mesurer.")
+print("\n  C'est LA raison pour laquelle un logiciel qui prédit quoi acheter")
+print("  s'appuie sur une quantité que personne ne sait mesurer.")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -88,10 +87,10 @@ for libelle, jours in [
     print(f"    {libelle:<16}{jours:>6}   "
           f"{e.value:>6.1%}  [{e.ci_low:>5.1%} — {e.ci_high:>5.1%}]  {barre}")
 
-print(f"\n  → Un mois de données ne permet PAS de distinguer une action")
-print(f"    à 15 % de volatilité d'une action à 30 %. Beaucoup")
-print(f"    d'applications de courtage affichent pourtant ce chiffre")
-print(f"    sans le moindre avertissement.")
+print("\n  → Un mois de données ne permet PAS de distinguer une action")
+print("    à 15 % de volatilité d'une action à 30 %. Beaucoup")
+print("    d'applications de courtage affichent pourtant ce chiffre")
+print("    sans le moindre avertissement.")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -125,12 +124,12 @@ for sigma in [0.05, 0.10, 0.20, 0.30, 0.50]:
     print(f"    {sigma:>9.0%}   {ari:>12.2%}{geo:>12.2%}"
           f"{ari-geo:>9.2%}{sigma**2/2:>9.2%}")
 
-print(f"\n  → La colonne 'Perdu' suit la colonne σ²/2. Ce n'est pas une")
-print(f"    coïncidence : c'est la formule. La traînée croît en CARRÉ de")
-print(f"    la volatilité. Doubler le risque quadruple ce qu'il te coûte.")
-print(f"\n  → C'est l'argument quantitatif en faveur de la diversification :")
-print(f"    réduire σ augmente ta richesse finale même si le rendement")
-print(f"    espéré ne bouge pas d'un millimètre.")
+print("\n  → La colonne 'Perdu' suit la colonne σ²/2. Ce n'est pas une")
+print("    coïncidence : c'est la formule. La traînée croît en CARRÉ de")
+print("    la volatilité. Doubler le risque quadruple ce qu'il te coûte.")
+print("\n  → C'est l'argument quantitatif en faveur de la diversification :")
+print("    réduire σ augmente ta richesse finale même si le rendement")
+print("    espéré ne bouge pas d'un millimètre.")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -152,13 +151,13 @@ for libelle, jours in [
     print(f"    {libelle:<14}{e.value:>15.2f}"
           f"{f'[{e.ci_low:+.2f} ; {e.ci_high:+.2f}]':>26}{prouve:>11}")
 
-print(f"\n  → Il faut des ANNÉES pour prouver qu'une stratégie correcte")
-print(f"    vaut mieux que rien. Et tout ceci suppose UN SEUL essai.")
-print(f"\n  → Si tu testes 200 variantes et gardes la meilleure, son Sharpe")
-print(f"    apparent est contaminé par le biais de sélection. Le théorème")
-print(f"    des fausses stratégies (Bailey & López de Prado) dit qu'avec")
-print(f"    assez d'essais, AUCUN Sharpe n'est assez élevé pour prouver")
-print(f"    quoi que ce soit.")
+print("\n  → Il faut des ANNÉES pour prouver qu'une stratégie correcte")
+print("    vaut mieux que rien. Et tout ceci suppose UN SEUL essai.")
+print("\n  → Si tu testes 200 variantes et gardes la meilleure, son Sharpe")
+print("    apparent est contaminé par le biais de sélection. Le théorème")
+print("    des fausses stratégies (Bailey & López de Prado) dit qu'avec")
+print("    assez d'essais, AUCUN Sharpe n'est assez élevé pour prouver")
+print("    quoi que ce soit.")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -171,12 +170,12 @@ for libelle, jours in [("1 mois", 21), ("3 mois", 63), ("1 an", 252)]:
     print(f"\n    Sur {libelle:<8} {e.format(2, percent=True)}")
     print(f"    {'':<13}→ {verdict}")
 
-print(f"\n  Et chaque estimation transporte ses hypothèses de validité :")
+print("\n  Et chaque estimation transporte ses hypothèses de validité :")
 for h in e.assumptions:
     print(f"      • {h}")
 
-print(f"\n  → Aucune fonction de ce moteur ne retourne un nombre nu.")
-print(f"    L'incertitude est dans le TYPE. Impossible de l'oublier.")
+print("\n  → Aucune fonction de ce moteur ne retourne un nombre nu.")
+print("    L'incertitude est dans le TYPE. Impossible de l'oublier.")
 
 print(f"\n{'═' * 72}")
 print("  Fin de la séance 1. Lance les tests :  python3 -m pytest tests/ -v")

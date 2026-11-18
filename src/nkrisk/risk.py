@@ -92,8 +92,8 @@ class RiskDecomposition:
         lignes = [
             f"Volatilité du portefeuille : {self.portfolio_volatility:.2%}",
             f"Ratio de diversification   : {self.diversification_ratio:.2f}",
-            f"Nombre effectif de paris   : {self.effective_bets:.1f} "
-            f"(sur {len(self.weights)} positions)",
+            (f"Nombre effectif de paris   : {self.effective_bets:.1f} "
+            f"(sur {len(self.weights)} positions)"),
         ]
         return "\n".join(lignes)
 
@@ -155,7 +155,7 @@ def decompose_risk(
     if not np.isclose(component.sum(), vol_p, rtol=1e-9):
         raise AssertionError(
             f"identité d'Euler violée : Σc_i = {component.sum():.10f} "
-            f"≠ σ_p = {vol_p:.10f}. Bug dans la décomposition."
+            + f"≠ σ_p = {vol_p:.10f}. Bug dans la décomposition."
         )
 
     percent = component / vol_p

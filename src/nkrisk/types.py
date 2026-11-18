@@ -78,7 +78,11 @@ class Estimate:
             raise ValueError(
                 f"intervalle inversé : [{self.ci_low}, {self.ci_high}]"
             )
-        if math.isfinite(self.value) and math.isfinite(self.ci_low):
+        # Deux conditions de natures différentes : la première garde
+        # contre les NaN, la seconde teste l'encadrement. Les fusionner
+        # en trois clauses `and` cacherait cette distinction, d'où la
+        # suppression ciblée de SIM102 ci-dessous.
+        if math.isfinite(self.value) and math.isfinite(self.ci_low):  # noqa: SIM102
             if not (self.ci_low <= self.value <= self.ci_high):
                 raise ValueError(
                     f"la valeur {self.value} est hors de son propre intervalle "
@@ -150,7 +154,7 @@ class Estimate:
         v = f"{self.value * k:.{decimals}f}{suffix}"
         lo = f"{self.ci_low * k:.{decimals}f}{suffix}"
         hi = f"{self.ci_high * k:.{decimals}f}{suffix}"
-        pct = int(round(self.confidence * 100))
+        pct = round(self.confidence * 100)
         flag = "" if self.is_meaningful() else "  ⚠️ PEU FIABLE"
         return f"{v}  [IC {pct}% : {lo} — {hi}]  n={self.n_obs}{flag}"
 

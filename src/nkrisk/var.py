@@ -69,7 +69,7 @@ class TailRisk:
         return self.cvar / self.var if self.var > 0 else float("nan")
 
     def format(self) -> str:
-        pct = int(round(self.confidence * 100))
+        pct = round(self.confidence * 100)
         return (
             f"{self.method:<16} VaR {pct}% = {self.var:>7.2%}   "
             f"CVaR = {self.cvar:>7.2%}   ratio = {self.tail_ratio:.2f}"

@@ -86,7 +86,8 @@ def load_yahoo(
     return serie
 
 
-def load_csv(path: str, date_column: str = "Date", price_column: str = "Close") -> pd.Series:
+def load_csv(path: str, date_column: str = "Date",
+             price_column: str = "Close") -> pd.Series:
     """
     Charge une série de prix depuis un CSV — export de courtier, par exemple.
 
