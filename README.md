@@ -36,8 +36,8 @@ sans avertissement.
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -q          # 133 tests rapides (~4 s)
-pytest tests/ -q -m ""    # 142 tests, couverture Monte Carlo incluse (~15 s)
+pytest tests/ -q          # 165 tests rapides (~6 s)
+pytest tests/ -q -m ""    # 176 tests, couverture Monte Carlo incluse (~25 s)
 ruff check src/ tests/ examples/
 mypy src/nkrisk
 ```
@@ -59,6 +59,7 @@ validation croisée)
 | `factors` | modèle à facteurs statistiques, nombre de facteurs par Marchenko-Pastur, attribution systématique / spécifique, scénarios de facteur |
 | `portfolio` | objet valeur gelé : poids + modèle de risque, validés une seule fois à la construction |
 | `stress` | moteur de scénarios — tout choc est une fonction Portefeuille → Portefeuille |
+| `backtest` | rejeu point-in-time strict, audit de causalité, coûts de transaction, Sharpe dégonflé |
 | `data` | générateurs synthétiques à vérité connue (GBM, Student-t corrélés) + chargeurs Yahoo/CSV |
 
 ---
@@ -133,6 +134,24 @@ est l'identité. Marchenko-Pastur prédit l'intervalle à 0,01 près. C'est ce q
 permet de choisir le nombre de facteurs sans seuil arbitraire ; le taux de
 faux positifs mesuré est de 6,4 %.
 
+**Une fuite d'un seul jour transforme un backtest en fiction.** Sur un marché
+simulé où l'espérance de rendement de chaque actif est rigoureusement nulle,
+une stratégie qui choisit ses quatre actifs en connaissant la suite multiplie
+le capital par 19 là où la même stratégie honnête le multiplie par 3,3. Elle ne
+plante pas, ne produit aucun NaN et respecte la signature du contrat.
+
+**L'audit de causalité la démasque sans lire son code.** On corrompt les
+données postérieures à une date, on rejoue, et on vérifie qu'aucune décision
+antérieure n'a bougé. Trois fuites de natures différentes détectées sur trois,
+zéro fausse alerte sur trois stratégies honnêtes — y compris une avance d'un
+seul jour sur huit ans de données, soit 0,05 % de l'historique.
+
+**Un Sharpe de 1,0 obtenu après 12 650 essais vaut moins que rien.** C'est le
+nombre de façons de choisir 4 actifs parmi 25 — toutes essayées par une
+stratégie qui « garde les quatre meilleurs ». Le Sharpe dégonflé fait tomber la
+probabilité que le résultat soit réel de 99,6 % à 10,3 %, sur exactement les
+mêmes rendements.
+
 **La VaR n'est pas une mesure de risque cohérente.** Deux obligations
 indépendantes à 4 % de défaut ont chacune une VaR à 95 % de zéro ; leur
 combinaison a une VaR de 0,5. La VaR affirme que diversifier crée du risque.
@@ -180,6 +199,17 @@ quatre cents actions sur huit ans battent quinze actions sur deux siècles.
 → `test_allonger_lhistorique_ne_fait_pas_converger_le_modele`,
 `test_un_grand_univers_bat_un_long_historique`
 
+**Un détecteur posé au mauvais endroit.** La première version de l'audit de
+causalité plaçait ses sondes uniformément sur l'historique. Elle attrapait une
+stratégie calibrée sur tout l'échantillon et ratait une avance d'un jour — la
+fuite la plus fréquente. Une décision prise en position t avec a périodes
+d'avance lit jusqu'à t+a−1 : elle n'est démasquée que si la corruption commence
+à un indice qu'elle atteint. Avec des sondes au hasard et un rebalancement
+mensuel, la probabilité valait 1/21. En posant la sonde SUR la date de
+décision, toute avance ≥ 1 est vue. La sensibilité d'un détecteur ne vient pas
+de sa finesse, mais de l'endroit où on le pose.
+→ `test_une_sonde_mal_placee_laisse_passer_la_fuite`
+
 La leçon commune : **un bug numérique ne lève pas d'exception.** Il produit un
 nombre plausible, du bon ordre de grandeur, et faux. La seule défense connue
 est de vérifier signe et ordre de grandeur contre une prédiction théorique
@@ -207,7 +237,9 @@ Dressing of Financial Correlation Matrices* · Chamberlain & Rothschild (1983),
 *Arbitrage, Factor Structure, and Mean-Variance Analysis on Large Asset
 Markets* · Meucci (2009), *Managing Diversification* · Artzner,
 Delbaen, Eber & Heath (1999), *Coherent Measures of Risk* · Kupiec (1995),
-*Techniques for Verifying the Accuracy of Risk Measurement Models* · Lo (2002),
+*Techniques for Verifying the Accuracy of Risk Measurement Models* · Bailey,
+Borwein, López de Prado & Zhu (2014), *Pseudo-Mathematics and Financial
+Charlatanism* · Lo (2002),
 *The Statistics of Sharpe Ratios* · Bailey & López de Prado (2014), *The
 Deflated Sharpe Ratio* · DeMiguel, Garlappi & Uppal (2009), *Optimal Versus
 Naive Diversification* · Michaud (1989), *The Markowitz Optimization Enigma*
