@@ -602,10 +602,26 @@ def test_lestimateur_qui_echoue_arrete_le_backtest() -> None:
     Pas de repli silencieux. Un moteur qui se rabattrait sur autre chose
     produirait une courbe ne correspondant à aucune stratégie
     exécutable.
+
+    ⚠️ PREMIÈRE VERSION : `pytest.raises(Exception)`, avec un
+    `# noqa: B017` pour faire taire ruff qui le signalait.
+
+    Un `raises(Exception)` aveugle passe sur n'importe quoi — un
+    ImportError, une faute de frappe dans un nom d'attribut, une
+    signature changée. Le test serait resté vert en ne prouvant plus
+    rien, et c'est le pire état possible pour un test.
+
+    Le commentaire de `test_le_portefeuille_est_immuable`, écrit à la
+    séance 5, dit exactement cela. Je l'ai écrit, puis violé trois
+    séances plus tard — et j'ai fait taire l'outil qui me le signalait
+    au lieu de l'écouter.
+
+    **Un avertissement de linter qu'on supprime est un avertissement
+    qu'on a lu et rejeté.** Celui-là avait raison.
     """
     # 30 actifs, fenêtre de 20 : la covariance empirique est singulière.
     donnees = _marche(n=30, t=200)
-    with pytest.raises(Exception):  # noqa: B017
+    with pytest.raises(ValueError, match="singulière"):
         walk_forward(donnees, MinimumVariance(sample_covariance), lookback=20,
                      step=10)
 
@@ -639,7 +655,8 @@ def test_une_sonde_mal_placee_laisse_passer_la_fuite() -> None:
     """
     donnees = _marche(t=700)
     lookback, step = 200, 25
-    fabrique = lambda d: RegardeCinqJoursPlusLoin(d, avance=1)  # noqa: E731
+    def fabrique(donnees_vues: pd.DataFrame) -> Strategy:
+        return RegardeCinqJoursPlusLoin(donnees_vues, avance=1)
 
     decisions = list(range(lookback, len(donnees), step))
 
