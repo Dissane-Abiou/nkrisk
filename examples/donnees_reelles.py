@@ -58,6 +58,7 @@ from nkrisk.data.quality import (
     inspect_prices,
     observations_per_year,
 )
+from nkrisk.ewma import ewma_covariance, ewma_weights
 from nkrisk.factors import InsufficientStructure, attribute_risk, pca_factor_model
 from nkrisk.returns import annualized_volatility, simple_returns
 
@@ -304,6 +305,88 @@ def main() -> int:
     print("    établi : le modèle ne se trompe pas de niveau, il arrive")
     print("    en retard. Une fenêtre glissante de 252 jours ne voit la")
     print("    tempête qu'une fois qu'elle est entrée dedans.")
+
+    # ── 6c. SÉRIE CONTRE MATRICE, SUR TES DONNÉES ────────────────────
+    titre("6c. L'EWMA TIENT-ELLE SES PROMESSES ICI ?")
+
+    print("  La séance 11 a établi en simulation que la pondération")
+    print("  exponentielle gagne sur une SÉRIE et perd via une MATRICE :")
+    print("  son avantage est en temps, son coût est en dimension.")
+    print()
+    print("  Les simulations proposent. Voici ce que disent tes données.")
+    print()
+
+    horizon = 21
+    fenetre = LOOKBACK
+    serie_ptf = rendements.mean(axis=1).to_numpy()
+    w_eq = np.full(rendements.shape[1], 1.0 / rendements.shape[1])
+
+    predicteurs = {
+        "série, ewma λ=0,97": ("serie", 0.97),
+        "série, ewma λ=0,94": ("serie", 0.94),
+        "série, fenêtre 252j": ("serie", None),
+        "matrice, ewma λ=0,97": ("matrice", 0.97),
+        "matrice, fenêtre + LW": ("matrice", None),
+    }
+    scores: dict[str, float] = {}
+    for nom, (chemin, lam) in predicteurs.items():
+        predits, realises = [], []
+        for t in range(fenetre, len(serie_ptf) - horizon, horizon):
+            realises.append(
+                float(np.std(serie_ptf[t: t + horizon], ddof=1))
+            )
+            if chemin == "serie":
+                bloc = serie_ptf[t - fenetre: t]
+                if lam is None:
+                    predits.append(float(np.std(bloc, ddof=1)))
+                else:
+                    poids = ewma_weights(len(bloc), lam)
+                    predits.append(float(np.sqrt(np.sum(poids * bloc**2))))
+            else:
+                fen = rendements.iloc[t - fenetre: t]
+                cov = (
+                    ledoit_wolf(fen)
+                    if lam is None
+                    else ewma_covariance(fen, decay=lam)
+                )
+                predits.append(float(np.sqrt(w_eq @ cov.matrix @ w_eq)))
+        z = np.array(realises) / np.array(predits)
+        scores[nom] = float(np.mean(z**2))
+
+    print(f"    {'prédicteur':<26} {'E[z²]':>8} {'écart à 1':>11}")
+    print("    " + "-" * 47)
+    for nom, v in scores.items():
+        print(f"    {nom:<26} {v:>8.2f} {abs(v - 1):>11.2f}")
+
+    def meilleur(prefixe: str) -> tuple[str, float]:
+        candidats = {k: v for k, v in scores.items() if k.startswith(prefixe)}
+        gagnant = min(candidats, key=lambda k: abs(candidats[k] - 1))
+        return gagnant, candidats[gagnant]
+
+    g_serie, v_serie = meilleur("série")
+    g_matrice, v_matrice = meilleur("matrice")
+    print()
+    print(f"  → Meilleur sur une série  : {g_serie} ({v_serie:.2f})")
+    print(f"  → Meilleur via une matrice : {g_matrice} ({v_matrice:.2f})")
+    print()
+    serie_ewma = scores["série, ewma λ=0,97"]
+    serie_fen = scores["série, fenêtre 252j"]
+    if abs(serie_ewma - 1) < abs(serie_fen - 1):
+        print("  → Sur une série, l'EWMA l'emporte : la simulation tient.")
+    else:
+        print("  → Sur une série, l'EWMA NE l'emporte PAS ici. La")
+        print("    simulation ne tient pas sur ces données, et c'est le")
+        print("    genre de démenti qui vaut plus qu'une confirmation.")
+    mat_ewma = scores["matrice, ewma λ=0,97"]
+    mat_fen = scores["matrice, fenêtre + LW"]
+    if abs(mat_fen - 1) < abs(mat_ewma - 1):
+        print("  → Via une matrice, la fenêtre longue reprend l'avantage :")
+        print("    le coût dimensionnel est bien là.")
+    else:
+        print("  → Via une matrice, l'EWMA tient aussi. Avec douze actifs")
+        print("    seulement, le coût dimensionnel peut rester sous le")
+        print("    gain temporel — la simulation le montrait croissant")
+        print("    avec N.")
 
     # ── 7. AUDIT DE CAUSALITÉ ────────────────────────────────────────
     titre("7. AUDIT DE CAUSALITÉ")

@@ -320,7 +320,7 @@ def test_le_chargement_groupe_valide_chaque_symbole(arborescence) -> None:
     fonction de plus haut niveau — une erreur d'architecture courante,
     où le contrôle vit dans une couche qu'on peut sauter.
     """
-    donnees, prive = arborescence
+    donnees, _prive = arborescence
     with pytest.raises(ValueError, match="symbole invalide"):
         load_prices(["AAPL", "../prive/secrets"], CsvSource(donnees))
 

@@ -309,7 +309,9 @@ class BacktestResult:
         )
 
     def calibration_path(
-        self, periods_per_year: int = TRADING_DAYS_PER_YEAR
+        self,
+        periods_per_year: int = TRADING_DAYS_PER_YEAR,
+        horizon: int | None = None,
     ) -> pd.DataFrame:
         """
         La calibration comme SÉRIE TEMPORELLE, et non comme un nombre.
@@ -337,6 +339,26 @@ class BacktestResult:
         Les volatilités réalisées par fenêtre sont très bruitées — une
         vingtaine d'observations chacune. On les lit en distribution,
         jamais une par une.
+
+        `horizon` — SUR COMBIEN DE PÉRIODES ON JUGE LA PRÉVISION
+        --------------------------------------------------------
+        Par défaut, chaque prévision est jugée sur l'intervalle qui la
+        sépare du rebalancement suivant. C'est le choix naturel quand
+        on évalue une stratégie : la prévision sert jusqu'au prochain
+        arbitrage.
+
+        Ce n'est PAS le bon choix quand on compare des estimateurs
+        entre eux. La qualité d'une prévision de volatilité dépend de
+        l'horizon auquel on la juge, et un estimateur à mémoire courte
+        n'a aucune raison de bien prédire trois mois à l'avance. Fixer
+        `horizon` permet de séparer les deux questions : « quel
+        estimateur », et « pour quel horizon ».
+
+        ⚠️ Un horizon de 1 est refusé : on ne mesure pas une volatilité
+        sur une seule observation. La première version rendait
+        silencieusement un tableau VIDE dans ce cas, et le code
+        appelant plantait trois lignes plus loin sur une colonne
+        absente — un échec déplacé, donc un échec mal diagnostiqué.
         """
         if self.predicted_volatility is None or self.predicted_volatility.empty:
             raise ValueError(
@@ -345,17 +367,33 @@ class BacktestResult:
                 "en produisent."
             )
 
-        dates = list(self.predicted_volatility.index)
-        lignes = []
-        for i, debut in enumerate(dates):
-            fin = dates[i + 1] if i + 1 < len(dates) else None
-            fenetre = (
-                self.returns.loc[debut:]
-                if fin is None
-                else self.returns.loc[debut:fin].iloc[:-1]
+        if horizon is not None and horizon < 2:
+            raise ValueError(
+                f"horizon={horizon} : une volatilité ne se mesure pas sur "
+                f"moins de deux observations. Augmente l'horizon, ou juge "
+                f"la prévision autrement (log-vraisemblance à un pas)."
             )
+
+        dates = list(self.predicted_volatility.index)
+        positions = {d: i for i, d in enumerate(self.returns.index)}
+        lignes = []
+        retenues = []
+        for i, debut in enumerate(dates):
+            if horizon is not None:
+                depart = positions.get(debut)
+                if depart is None:
+                    continue
+                fenetre = self.returns.iloc[depart: depart + horizon]
+            else:
+                fin = dates[i + 1] if i + 1 < len(dates) else None
+                fenetre = (
+                    self.returns.loc[debut:]
+                    if fin is None
+                    else self.returns.loc[debut:fin].iloc[:-1]
+                )
             if len(fenetre) < 2:
                 continue
+            retenues.append(debut)
             realisee = float(
                 np.std(fenetre.to_numpy(), ddof=1) * np.sqrt(periods_per_year)
             )
@@ -368,8 +406,15 @@ class BacktestResult:
                     "n_obs": len(fenetre),
                 }
             )
-        return pd.DataFrame(lignes, index=pd.Index(dates[: len(lignes)],
-                                                   name="rebalancement"))
+        if not lignes:
+            raise ValueError(
+                "aucune fenêtre exploitable : chaque prévision est suivie de "
+                "moins de deux observations. Augmente `step`, ou fixe "
+                "`horizon`."
+            )
+        return pd.DataFrame(
+            lignes, index=pd.Index(retenues, name="rebalancement")
+        )
 
     def calibration_diagnosis(
         self,

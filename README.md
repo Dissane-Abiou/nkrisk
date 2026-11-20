@@ -38,8 +38,8 @@ sans avertissement.
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -q          # 242 tests rapides (~8 s)
-pytest tests/ -q -m ""    # 254 tests, couverture Monte Carlo incluse (~30 s)
+pytest tests/ -q          # 262 tests rapides (~8 s)
+pytest tests/ -q -m ""    # 276 tests, couverture Monte Carlo incluse (~32 s)
 ruff check src/ tests/ examples/
 mypy src/nkrisk
 ```
@@ -55,6 +55,7 @@ validation croisée)
 |---|---|
 | `returns` | rendements simples et log, volatilité, ratio de Sharpe, traînée de volatilité — tous avec intervalles de confiance |
 | `covariance` | covariance empirique et contraction de Ledoit-Wolf, avec diagnostic de conditionnement |
+| `ewma` | pondération exponentielle, taille d'échantillon effective portée dans l'intervalle, ajustement de λ par vraisemblance |
 | `risk` | décomposition du risque : contributions marginale et composante, ratio de diversification, nombre effectif de paris |
 | `var` | VaR et CVaR par trois méthodes, backtest de Kupiec, contre-exemple de sous-additivité |
 | `drawdown` | courbe sous l'eau, épisodes datés, indice d'ulcère, Calmar, distribution simulée du maximum |
@@ -178,6 +179,18 @@ Corrigée par liste blanche *et* confinement du chemin résolu — un test par
 couche montre que chacune attrape ce que l'autre laisse passer. Modèle de
 menace complet dans [SECURITE.md](SECURITE.md).
 
+**L'avantage d'un estimateur réactif est en TEMPS ; son coût est en
+DIMENSION.** La pondération exponentielle bien réglée bat la fenêtre longue
+quand on prévoit la volatilité d'une série (E[z²] de 1,09 contre 1,11, pour une
+borne causale à 0,99), et perd dès qu'on passe par une matrice de covariance
+(1,24 contre 1,17). Une série a un paramètre à estimer ; une matrice N×N en a
+N(N+1)/2, portés par les mêmes 66 observations effectives.
+
+**Et λ doit correspondre à l'horizon de prévision.** Le 0,94 de RiskMetrics est
+calibré pour une VaR à un jour : employé pour prévoir un mois, il bruite plus
+qu'il n'anticipe (1,14 contre 1,09 pour λ=0,97, dont la demi-vie de 23 jours
+épouse l'horizon).
+
 **La VaR n'est pas une mesure de risque cohérente.** Deux obligations
 indépendantes à 4 % de défaut ont chacune une VaR à 95 % de zéro ; leur
 combinaison a une VaR de 0,5. La VaR affirme que diversifier crée du risque.
@@ -267,6 +280,16 @@ l'écart-type de l'ensemble — par Jensen, la seconde est toujours la plus
 grande. Il fallait agréger les variances.
 → `test_le_diagnostic_saccorde_avec_la_calibration_agregee`
 
+**Quatre prédictions, quatre réfutations, un oracle cassé.** J'avais annoncé
+que la pondération exponentielle réparerait la calibration de 0,79. Elle
+l'empire. Puis : « c'est ma mesure » — non, les deux concordent ; « c'est
+l'optimiseur » — non, vrai sans optimiseur ; « c'est l'horizon » — non, vrai à
+tout horizon. Le vrai résultat n'est apparu qu'après avoir réparé un oracle qui
+marquait 1,57 là où il devait marquer 1,00, parce qu'il normalisait par la
+moyenne *théorique* d'un processus quasi intégré au lieu de sa moyenne
+d'échantillon.
+→ `test_lavantage_de_lewma_ne_survit_pas_a_la_matrice`
+
 La leçon commune : **un bug numérique ne lève pas d'exception.** Il produit un
 nombre plausible, du bon ordre de grandeur, et faux. La seule défense connue
 est de vérifier signe et ordre de grandeur contre une prédiction théorique
@@ -318,7 +341,9 @@ Delbaen, Eber & Heath (1999), *Coherent Measures of Risk* · Kupiec (1995),
 *Techniques for Verifying the Accuracy of Risk Measurement Models* · Bailey,
 Borwein, López de Prado & Zhu (2014), *Pseudo-Mathematics and Financial
 Charlatanism* · Lo (2002),
-*The Statistics of Sharpe Ratios* · Bailey & López de Prado (2014), *The
+*The Statistics of Sharpe Ratios* · J.P. Morgan / Reuters (1996),
+*RiskMetrics Technical Document* · Kish (1965), *Survey Sampling* ·
+Bailey & López de Prado (2014), *The
 Deflated Sharpe Ratio* · DeMiguel, Garlappi & Uppal (2009), *Optimal Versus
 Naive Diversification* · Michaud (1989), *The Markowitz Optimization Enigma*
 
