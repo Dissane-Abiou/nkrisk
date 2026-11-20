@@ -3,6 +3,7 @@
 [![CI](https://github.com/Dissane-Abiou/nkrisk/actions/workflows/ci.yml/badge.svg)](https://github.com/Dissane-Abiou/nkrisk/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/Dissane-Abiou/nkrisk)
 [![Licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+[![Sécurité](https://img.shields.io/badge/mod%C3%A8le%20de%20menace-document%C3%A9-blue)](SECURITE.md)
 
 **Moteur de mesure de risque de portefeuille qui déclare son incertitude.**
 
@@ -37,8 +38,8 @@ sans avertissement.
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -q          # 200 tests rapides (~8 s)
-pytest tests/ -q -m ""    # 212 tests, couverture Monte Carlo incluse (~30 s)
+pytest tests/ -q          # 242 tests rapides (~8 s)
+pytest tests/ -q -m ""    # 254 tests, couverture Monte Carlo incluse (~30 s)
 ruff check src/ tests/ examples/
 mypy src/nkrisk
 ```
@@ -169,6 +170,14 @@ variance minimale sur Ledoit-Wolf sous-estime sa propre volatilité réalisée d
 intégré montre que l'écart est **concentré** : une fenêtre glissante voit la
 tempête une fois qu'elle est entrée dedans.
 
+**Une faille de traversée de répertoire a survécu une séance dans ce dépôt.**
+`Path(dossier) / f"{ticker}.csv"` laissait `fetch("../prive/secrets")` lire
+hors du périmètre, et `fetch("/etc/passwd")` faire pire : l'opérateur `/` de
+pathlib **abandonne son membre de gauche** quand celui de droite est absolu.
+Corrigée par liste blanche *et* confinement du chemin résolu — un test par
+couche montre que chacune attrape ce que l'autre laisse passer. Modèle de
+menace complet dans [SECURITE.md](SECURITE.md).
+
 **La VaR n'est pas une mesure de risque cohérente.** Deux obligations
 indépendantes à 4 % de défaut ont chacune une VaR à 95 % de zéro ; leur
 combinaison a une VaR de 0,5. La VaR affirme que diversifier crée du risque.
@@ -262,6 +271,27 @@ La leçon commune : **un bug numérique ne lève pas d'exception.** Il produit u
 nombre plausible, du bon ordre de grandeur, et faux. La seule défense connue
 est de vérifier signe et ordre de grandeur contre une prédiction théorique
 indépendante.
+
+---
+
+## Sécurité
+
+Le dépôt porte un modèle de menace écrit : qui peut faire entrer quoi, ce qui
+est traité, et surtout **ce qui est explicitement hors périmètre**. Un
+périmètre non déclaré est un périmètre que le lecteur suppose plus large qu'il
+ne l'est.
+
+`tests/test_securite.py` exécute réellement les attaques — traversée de
+répertoire, chemin absolu, lien symbolique, injection ANSI dans les journaux,
+épuisement mémoire — et chacune **fonctionnait** avant son correctif. Un test
+de sécurité qui n'a jamais échoué ne prouve rien.
+
+La menace principale contre un moteur de risque n'est cependant pas dans ce
+fichier : c'est de **produire un chiffre faux et crédible**. Les
+contre-mesures contre celle-là sont l'architecture entière du projet — les
+intervalles de confiance, le refus de répondre, l'audit de causalité, le
+Sharpe dégonflé, la calibration. *La sécurité d'un outil de décision, c'est
+d'abord qu'il ne mente pas sur ce qu'il sait.*
 
 ---
 

@@ -583,7 +583,7 @@ def test_un_historique_tronque_nest_pas_un_desalignement_de_calendrier() -> None
 
     rapport = inspect_prices(series)
 
-    tronques = [a for a in rapport.anomalies if a.kind == "historique tronqué"]
+    tronques = [a for a in rapport.anomalies if a.kind == "démarrage tardif"]
     desalignes = [
         a for a in rapport.anomalies if a.kind == "calendriers désalignés"
     ]
@@ -594,6 +594,9 @@ def test_un_historique_tronque_nest_pas_un_desalignement_de_calendrier() -> None
     assert "TOUT l'univers" in tronques[0].detail
     # Aucun jour férié décalé ici : rien ne doit être signalé à ce titre.
     assert desalignes == []
+    # Les deux mesures doivent diverger, et c'est tout le propos.
+    assert rapport.calendar_overlap < 1.0
+    assert rapport.holiday_overlap == 1.0
 
 
 def test_les_deux_causes_sont_rapportees_separement() -> None:
@@ -606,7 +609,7 @@ def test_les_deux_causes_sont_rapportees_separement() -> None:
     rapport = inspect_prices(series)
     kinds = [a.kind for a in rapport.anomalies]
 
-    assert "historique tronqué" in kinds
+    assert "démarrage tardif" in kinds
     assert "calendriers désalignés" in kinds
 
     desaligne = next(
@@ -616,3 +619,54 @@ def test_les_deux_causes_sont_rapportees_separement() -> None:
     # décompte doit rester largement sous le total des dates perdues.
     assert desaligne.count < rapport.n_dates_union - rapport.n_dates_intersection
     assert "fenêtre commune" in desaligne.detail
+
+
+def test_une_troncature_dun_jour_nest_pas_signalee() -> None:
+    """
+    ⚠️ SECOND DÉFAUT TROUVÉ PAR LES VRAIES DONNÉES.
+
+    Les titres américains s'arrêtaient la veille des canadiens — un
+    simple décalage de publication. Le rapport produisait cinq
+    avertissements identiques pour un jour, au-dessus du seul qui
+    comptait : une entrée en Bourse à 97 jours.
+
+    Un détecteur qui signale le trivial au même rang que le grave n'est
+    pas plus prudent, il est moins lu. **Le bruit d'un outil de
+    détection est un coût, pas une précaution gratuite** — c'est la même
+    leçon que le contrôle négatif de l'audit de causalité à la séance 8.
+    """
+    complet = _prix(n=5, t=800)
+    series = {c: complet[c] for c in complet.columns}
+    for nom in list(series)[:3]:
+        series[nom] = series[nom].iloc[:-1]      # un jour de moins
+    tardif = list(series)[-1]
+    series[tardif] = series[tardif].iloc[40:]    # quarante de moins
+
+    rapport = inspect_prices(series, min_truncation=5)
+    kinds = [(a.kind, a.asset) for a in rapport.anomalies]
+
+    assert ("démarrage tardif", tardif) in kinds
+    assert not any(k == "fin anticipée" for k, _ in kinds), (
+        "un décalage d'un jour ne doit pas produire d'avertissement"
+    )
+    assert len([k for k, _ in kinds if k == "démarrage tardif"]) == 1
+
+
+def test_les_deux_mesures_de_recouvrement_ne_disent_pas_la_meme_chose() -> None:
+    """
+    `calendar_overlap` mélange historiques inégaux et fériés décalés.
+    `holiday_overlap` ne mesure que les seconds, sur la fenêtre commune.
+
+    La narration de `donnees_reelles.py` annonçait 7 % en citant le
+    premier là où le rapport affichait 3,9 % du second, deux lignes
+    plus haut. Dixième dérive de narration du projet.
+    """
+    complet = _prix(n=4, t=1_000)
+    series = _deux_places(complet, part_fermee=0.05, seed=11)
+    tardif = list(series)[-1]
+    series[tardif] = series[tardif].iloc[300:]
+
+    rapport = inspect_prices(series)
+
+    assert rapport.calendar_overlap < rapport.holiday_overlap < 1.0
+    assert rapport.n_dates_common_window < rapport.n_dates_union

@@ -115,11 +115,26 @@ def main() -> int:
         print(f"    {ligne}")
 
     print()
-    if rapport.calendar_overlap < 1.0:
-        print(f"  → {1 - rapport.calendar_overlap:.1%} des dates ne sont pas")
-        print("    communes à tous les titres. C'est l'écart entre les")
-        print("    calendriers de Toronto et de New York, et il n'a rien")
-        print("    d'une hypothèse : il est dans les données.")
+    print("  ⚠️ CETTE NARRATION DISAIT N'IMPORTE QUOI JUSQU'À LA SÉANCE 10.")
+    print("     Elle annonçait « 7 % de calendriers désalignés » en citant")
+    print("     un chiffre qui additionne deux causes, deux lignes sous un")
+    print("     rapport qui affichait 3,9 % pour la bonne. Dixième dérive")
+    print("     de narration du projet, et la plus bête : les deux nombres")
+    print("     étaient à l'écran en même temps.")
+    print()
+    manque_total = 1 - rapport.calendar_overlap
+    manque_feries = 1 - rapport.holiday_overlap
+    print(f"  → {manque_total:.1%} des dates disponibles ne sont pas communes")
+    print("    à tous les titres. Mais ce chiffre mélange deux causes.")
+    print()
+    print(f"  → Désalignement de calendriers SEUL : {manque_feries:.1%} de la")
+    print("    fenêtre commune. C'est l'écart Toronto / New York, et il n'a")
+    print("    rien d'une hypothèse : il est dans les données.")
+    print()
+    print(f"  → Le reste — {manque_total - manque_feries:.1%} — vient de titres dont")
+    print("    l'historique est plus court. Remède opposé : on n'aligne pas")
+    print("    un calendrier, on décide d'exclure le titre ou d'accepter de")
+    print("    perdre le début pour tout le monde.")
     rapport.raise_if_blocking()
 
     # ── 3. LE CHOIX D'ALIGNEMENT, SUR DE VRAIES DONNÉES ──────────────
@@ -155,7 +170,7 @@ def main() -> int:
     # ── 4. VOLATILITÉS ───────────────────────────────────────────────
     titre("4. VOLATILITÉS, AVEC LEUR INCERTITUDE")
 
-    annuel = int(round(par_an))
+    annuel = round(par_an)
     print(f"    {'titre':<10} {'volatilité annualisée':>45}")
     for col in rendements.columns:
         v = annualized_volatility(rendements[col], periods_per_year=annuel)

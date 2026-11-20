@@ -130,6 +130,7 @@ class QualityReport:
     n_assets: int
     n_dates_union: int
     n_dates_intersection: int
+    n_dates_common_window: int = 0
 
     @property
     def blocking(self) -> tuple[Anomaly, ...]:
@@ -145,10 +146,28 @@ class QualityReport:
 
     @property
     def calendar_overlap(self) -> float:
-        """Part des dates de l'union où TOUS les actifs cotent."""
+        """
+        Part de TOUTES les dates disponibles où tous les actifs cotent.
+
+        ⚠️ Ce chiffre mélange deux causes : les historiques de longueurs
+        différentes et les jours fériés décalés. Pour ne mesurer que les
+        seconds, utiliser `holiday_overlap`.
+        """
         if self.n_dates_union == 0:
             return 0.0
         return self.n_dates_intersection / self.n_dates_union
+
+    @property
+    def holiday_overlap(self) -> float:
+        """
+        Part de la FENÊTRE COMMUNE où tous les actifs cotent.
+
+        C'est le vrai taux de désalignement de calendriers : il exclut
+        les dates où un titre n'existait pas encore ou ne cotait plus.
+        """
+        if self.n_dates_common_window == 0:
+            return 0.0
+        return self.n_dates_intersection / self.n_dates_common_window
 
     def raise_if_blocking(self) -> None:
         """
@@ -182,8 +201,10 @@ class QualityReport:
         lignes = [
             f"{self.n_assets} actifs  |  "
             f"{self.n_dates_union} dates au total, "
-            f"{self.n_dates_intersection} communes à tous "
-            f"({self.calendar_overlap:.1%})"
+            f"{self.n_dates_intersection} communes à tous\n"
+            f"  dont désalignement de calendriers seul : "
+            f"{1 - self.holiday_overlap:.1%} de la fenêtre commune "
+            f"({self.n_dates_common_window} dates)"
         ]
         if not self.anomalies:
             lignes.append("  ✓ aucune anomalie détectée")
@@ -206,6 +227,7 @@ def inspect_prices(
     min_stale_run: int = 4,
     jump_threshold: float = 0.25,
     min_points: int = 60,
+    min_truncation: int = 5,
 ) -> QualityReport:
     """
     Passe un jeu de séries de prix au crible, sans rien modifier.
@@ -275,22 +297,53 @@ def inspect_prices(
         fins = {n: idx.max() for n, idx in index_par_actif.items()}
         debut_commun, fin_commune = max(debuts.values()), min(fins.values())
 
+        # ⚠️ SEUIL `min_truncation` — AJOUTÉ APRÈS LE PREMIER VRAI JEU.
+        #
+        # La version précédente signalait toute troncature, y compris
+        # d'UN SEUL jour. Sur des données réelles tirées en séance, les
+        # titres américains s'arrêtaient la veille des canadiens : cinq
+        # avertissements identiques pour un décalage d'un jour, au-dessus
+        # du seul qui comptait — une entrée en Bourse à 97 jours.
+        #
+        # Un rapport d'anomalies qui signale le trivial au même rang que
+        # le grave n'est pas plus prudent : il est moins lu. Le bruit
+        # d'un outil de détection est un coût de sécurité, pas une
+        # précaution gratuite.
         for nom, debut in debuts.items():
-            perdues = int((union < debut).sum()) + int((union > fins[nom]).sum())
-            if perdues > 0:
+            tardif = int((union < debut).sum())
+            anticipee = int((union > fins[nom]).sum())
+
+            if tardif >= min_truncation:
                 anomalies.append(
                     Anomaly(
-                        kind="historique tronqué",
+                        kind="démarrage tardif",
                         asset=nom,
                         severity=AVERTISSEMENT,
-                        count=perdues,
+                        count=tardif,
                         detail=(
-                            f"commence le {debut.date()} et finit le "
-                            f"{fins[nom].date()} — en intersection, ce seul "
-                            f"titre ampute {perdues} date(s) pour TOUT "
-                            f"l'univers"
+                            f"commence le {debut.date()}, soit {tardif} "
+                            f"date(s) après le plus ancien — en "
+                            f"intersection, ce seul titre les ampute pour "
+                            f"TOUT l'univers. L'exclure coûte peut-être "
+                            f"moins cher."
                         ),
                         first=pd.Timestamp(debut),
+                    )
+                )
+            if anticipee >= min_truncation:
+                anomalies.append(
+                    Anomaly(
+                        kind="fin anticipée",
+                        asset=nom,
+                        severity=AVERTISSEMENT,
+                        count=anticipee,
+                        detail=(
+                            f"s'arrête le {fins[nom].date()}, soit "
+                            f"{anticipee} date(s) avant le plus récent — "
+                            f"retrait de cote, ou simple retard de "
+                            f"publication ?"
+                        ),
+                        first=pd.Timestamp(fins[nom]),
                     )
                 )
 
@@ -313,11 +366,19 @@ def inspect_prices(
                 )
             )
 
+    if index_par_actif and len(union) > 0:
+        debut_c = max(idx.min() for idx in index_par_actif.values())
+        fin_c = min(idx.max() for idx in index_par_actif.values())
+        n_fenetre = int(np.sum((union >= debut_c) & (union <= fin_c)))
+    else:
+        n_fenetre = 0
+
     return QualityReport(
         anomalies=tuple(anomalies),
         n_assets=len(series),
         n_dates_union=len(union),
         n_dates_intersection=len(inter),
+        n_dates_common_window=n_fenetre,
     )
 
 

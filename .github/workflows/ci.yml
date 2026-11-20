@@ -21,6 +21,25 @@ on:
   pull_request:
     branches: [main]
 
+# ══════════════════════════════════════════════════════════════════
+#  PRIVILÈGES DU JETON — AJOUTÉ À LA SÉANCE 10
+# ══════════════════════════════════════════════════════════════════
+#
+# Sans cette clause, le GITHUB_TOKEN hérite des privilèges par défaut
+# du dépôt, qui peuvent inclure l'ÉCRITURE sur le code, les artefacts
+# et les paquets. Ce jeton est injecté dans chaque exécution, donc
+# dans chaque action tierce qu'on appelle.
+#
+# Aucun travail ci-dessous n'écrit quoi que ce soit. Leur donner le
+# droit de le faire est un privilège offert sans contrepartie — et
+# c'est exactement ce dont se sert une action compromise.
+#
+# Moindre privilège : lecture seule, déclarée globalement. Un futur
+# travail qui aurait réellement besoin d'écrire devra le demander
+# explicitement, ce qui rendra la demande visible en revue.
+permissions:
+  contents: read
+
 # Annule les exécutions précédentes sur la même branche : pousser trois
 # fois d'affilée ne doit pas occuper trois exécuteurs.
 concurrency:
@@ -28,6 +47,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ⚠️ Les actions sont référencées par ÉTIQUETTE (@v4), qui est
+  # MUTABLE : celui qui contrôle le dépôt de l'action peut la déplacer
+  # vers un autre commit, et ce commit s'exécutera avec le jeton de ce
+  # dépôt. C'est le vecteur de plusieurs compromissions de chaînes
+  # d'intégration continue.
+  #
+  # L'épinglage par empreinte de commit corrige cela. La marche à
+  # suivre, avec les deux commandes qui donnent les bonnes valeurs, est
+  # dans SECURITE.md — elles ne sont pas écrites ici parce qu'elles
+  # n'ont pas pu être vérifiées au moment de la rédaction, et qu'inscrire
+  # de mémoire l'empreinte dont dépend la sécurité du mécanisme serait
+  # pire que de ne pas l'épingler du tout.
+
   qualite:
     name: Lint et types
     runs-on: ubuntu-latest
@@ -43,6 +75,50 @@ jobs:
         run: ruff check src/ tests/ examples/
       - name: Mypy
         run: mypy src/nkrisk
+
+  securite:
+    name: Audit des dépendances
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Installer
+        run: |
+          pip install -e ".[dev]"
+          pip install pip-audit
+      - name: Vulnérabilités connues
+        # NON BLOQUANT, et c'est un arbitrage assumé.
+        #
+        # Une faille publiée dans une dépendance transitive de numpy
+        # rendrait la CI rouge du jour au lendemain, sans qu'une seule
+        # ligne de ce dépôt ait changé — et sans qu'il existe forcément
+        # un correctif le jour même. Bloquer la fusion dans ce cas
+        # apprend surtout à contourner la vérification.
+        #
+        # À savoir aussi : pip-audit examine TOUT l'environnement, pas
+        # seulement les dépendances déclarées du projet. Il remontera
+        # donc aussi les failles de l'outillage de construction
+        # (setuptools, pip). C'est informatif — on livre avec cet
+        # environnement — mais cela ajoute du bruit qu'on ne contrôle
+        # pas, et c'est une raison de plus de ne pas bloquer.
+        #
+        # Le résultat est donc visible et annoté, pas éliminatoire.
+        # Dans un contexte où l'on livre en production, l'arbitrage
+        # s'inverse : on bloque, et on prévoit une procédure de
+        # dérogation documentée. Ce qui compte est que ce soit un
+        # CHOIX, pas un oubli.
+        continue-on-error: true
+        run: pip-audit --strict --desc
+      - name: Résumé
+        if: always()
+        run: |
+          echo "### Audit des dépendances" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          pip-audit --desc 2>&1 | tail -40 >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
   tests:
     name: Tests rapides (Python ${{ matrix.python }})
@@ -68,7 +144,7 @@ jobs:
   complet:
     name: Suite complète et couverture
     runs-on: ubuntu-latest
-    needs: [qualite, tests]
+    needs: [qualite, tests, securite]
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4

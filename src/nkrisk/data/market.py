@@ -56,12 +56,83 @@ se contente de les faire entrer proprement.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import pandas as pd
+
+# ══════════════════════════════════════════════════════════════════════
+#  VALIDATION DES SYMBOLES — PREMIÈRE LIGNE DE DÉFENSE
+# ══════════════════════════════════════════════════════════════════════
+
+# Un symbole boursier : lettres, chiffres, et les quelques séparateurs
+# réellement utilisés (RY.TO, BRK-B, ^GSPC). Rien d'autre.
+#
+# Ce motif interdit en particulier `/`, `\`, `..`, les octets nuls et
+# les séquences d'échappement ANSI. Chacun de ces caractères ouvre une
+# porte différente, et aucun n'a jamais servi à nommer un titre.
+_SYMBOLE = re.compile(r"^\^?[A-Za-z0-9][A-Za-z0-9._=-]{0,23}$")
+
+TAILLE_MAX_CSV = 64 * 1024 * 1024      # 64 Mio
+LIGNES_MAX_CSV = 2_000_000
+
+
+def _lisible(octets: int) -> str:
+    """
+    Formate une taille dans l'unité qui la rend lisible.
+
+    Un message « fichier de 0 Mo, limite 0 Mo » est pire qu'inutile :
+    il donne l'air d'un bogue alors que la limite a correctement joué.
+    Un diagnostic illisible est un diagnostic qu'on ignore.
+    """
+    for seuil, unite in ((1e9, "Go"), (1e6, "Mo"), (1e3, "ko")):
+        if octets >= seuil:
+            return f"{octets / seuil:.1f} {unite}"
+    return f"{octets} octets"
+
+
+def valider_symbole(ticker: str) -> str:
+    """
+    Rejette tout ce qui ne ressemble pas à un symbole boursier.
+
+    POURQUOI UNE LISTE BLANCHE ET NON UNE LISTE NOIRE
+    --------------------------------------------------
+    On pourrait interdire `..`, puis `/`, puis `\\`, puis `%2e%2e`, puis
+    les formes Unicode équivalentes… Chaque interdiction en oublie une,
+    et l'histoire des traversées de répertoire est l'histoire de ces
+    oublis.
+
+    Une liste blanche inverse la charge : tout est refusé sauf ce qu'on
+    a explicitement décrit. L'oubli devient un faux refus — visible,
+    signalé, corrigeable — au lieu d'un faux accès, silencieux.
+
+    CE QUE CETTE FONCTION NE SUFFIT PAS À GARANTIR
+    -----------------------------------------------
+    Elle ne protège pas d'un lien symbolique placé DANS le dossier
+    autorisé et pointant ailleurs : le nom `AAPL` est parfaitement
+    valide, et c'est le système de fichiers qui redirige. D'où le
+    confinement du chemin résolu dans `CsvSource`, qui attrape ce cas
+    précis.
+
+    Valider l'entrée et confiner le résultat ne font donc pas double
+    emploi : chacun couvre ce que l'autre laisse passer.
+    """
+    if not isinstance(ticker, str):
+        raise TypeError(f"symbole non textuel : {type(ticker).__name__}")
+    if not _SYMBOLE.match(ticker):
+        # On ne renvoie PAS la valeur reçue dans le message : un symbole
+        # contenant des séquences d'échappement ANSI peut réécrire le
+        # terminal de celui qui lit le journal, et un message d'erreur
+        # est précisément ce qui finit dans un journal.
+        raise ValueError(
+            f"symbole invalide ({len(ticker)} caractères). Attendu : "
+            f"lettres, chiffres et . _ - = , éventuellement précédés de "
+            f"^, au plus 24 caractères."
+        )
+    return ticker
 
 # ══════════════════════════════════════════════════════════════════════
 #  LE CONTRAT D'UNE SOURCE
@@ -105,6 +176,9 @@ class InMemorySource:
     def fetch(
         self, ticker: str, start: str | None = None, end: str | None = None
     ) -> pd.Series:
+        # Pas de validation ici : cette source ne touche ni au système de
+        # fichiers ni au réseau, et ses clés sont fournies par le code
+        # appelant, pas par un tiers. Valider serait du rite.
         if ticker not in self.series:
             raise KeyError(
                 f"symbole inconnu dans cette source : '{ticker}'. "
@@ -132,16 +206,62 @@ class CsvSource:
     folder: str | Path
     date_column: str = "Date"
     price_column: str = "Close"
+    max_bytes: int = TAILLE_MAX_CSV
+    max_rows: int = LIGNES_MAX_CSV
     name: str = "csv"
 
     def fetch(
         self, ticker: str, start: str | None = None, end: str | None = None
     ) -> pd.Series:
-        chemin = Path(self.folder) / f"{ticker}.csv"
+        valider_symbole(ticker)
+
+        # ⚠️ CWE-22 — TRAVERSÉE DE RÉPERTOIRE. CE CODE ÉTAIT VULNÉRABLE.
+        #
+        # Version livrée à la séance 9 :
+        #
+        #     chemin = Path(self.folder) / f"{ticker}.csv"
+        #
+        # Deux évasions, toutes deux vérifiées :
+        #
+        #   fetch("../prive/secrets")       lit hors du dossier ;
+        #   fetch("/etc/passwd")            encore pire — l'opérateur `/`
+        #                                   de pathlib ABANDONNE le membre
+        #                                   de gauche quand celui de droite
+        #                                   est absolu. Le dossier autorisé
+        #                                   disparaît sans un mot.
+        #
+        # Le second est le plus traître : rien dans la lecture du code ne
+        # suggère que `a / b` puisse ne pas commencer par `a`.
+        racine = Path(self.folder).resolve()
+        chemin = (racine / f"{ticker}.csv").resolve()
+        if not chemin.is_relative_to(racine):
+            raise ValueError(
+                f"chemin hors du dossier autorisé. Le symbole demandé "
+                f"résout en dehors de {racine}."
+            )
+
         if not chemin.exists():
             raise FileNotFoundError(f"fichier absent : {chemin}")
 
-        df = pd.read_csv(chemin, parse_dates=[self.date_column])
+        # Déni de service par épuisement mémoire : `read_csv` charge tout.
+        # Un fichier de plusieurs gigaoctets, volontaire ou non, fait
+        # tomber le processus. Une borne vaut mieux qu'un plantage.
+        taille = chemin.stat().st_size
+        if taille > self.max_bytes:
+            raise ValueError(
+                f"fichier de {_lisible(taille)}, limite "
+                f"{_lisible(self.max_bytes)}. Découpe-le ou relève "
+                f"`max_bytes` en connaissance de cause."
+            )
+
+        df = pd.read_csv(
+            chemin, parse_dates=[self.date_column], nrows=self.max_rows
+        )
+        if len(df) >= self.max_rows:
+            raise ValueError(
+                f"plus de {self.max_rows:,} lignes : lecture interrompue "
+                f"plutôt que tronquée en silence."
+            )
         if df[self.date_column].duplicated().any():
             n = int(df[self.date_column].duplicated().sum())
             raise ValueError(
@@ -199,6 +319,10 @@ class YahooSource:
     def fetch(
         self, ticker: str, start: str | None = None, end: str | None = None
     ) -> pd.Series:
+        # Le symbole part dans une URL construite par yfinance. On ne
+        # sait pas comment il l'échappe, et on n'a pas à le savoir : ce
+        # qu'on contrôle, c'est ce qu'on lui donne.
+        valider_symbole(ticker)
         try:
             import yfinance as yf
         except ImportError as exc:  # pragma: no cover - dépend de l'install
