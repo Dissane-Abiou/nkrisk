@@ -723,3 +723,120 @@ def test_aucun_faux_positif_sur_vingt_univers() -> None:
         faux += not audit.clean
 
     assert faux == 0, f"{faux}/{essais} fausses alertes"
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  LA CALIBRATION COMME SÉRIE, ET SON DIAGNOSTIC
+# ══════════════════════════════════════════════════════════════════════
+
+
+def _marche_groupe(
+    n: int = 10, t: int = 2_400, k: int = 2, seed: int = 0, garch: bool = True
+) -> pd.DataFrame:
+    """
+    Même générateur à facteurs, mais la volatilité peut être GROUPÉE :
+    un GARCH(1,1) sur l'échelle commune reproduit le fait stylisé le
+    mieux établi des marchés — les grosses séances arrivent en paquets.
+    """
+    rng = np.random.default_rng(seed)
+    b = rng.normal(0.0, 0.5, (n, k))
+    b[:, 0] = np.abs(rng.normal(0.8, 0.2, n))
+    if garch:
+        a, be = 0.14, 0.85
+        h = np.empty(t)
+        h[0] = 1.0
+        z = rng.normal(0, 1, t)
+        for i in range(1, t):
+            h[i] = (1 - a - be) + a * (z[i - 1] ** 2 * h[i - 1]) + be * h[i - 1]
+        echelle = np.sqrt(h)[:, None]
+    else:
+        echelle = np.ones((t, 1))
+    f = rng.normal(0, 1, (t, k)) * echelle
+    e = rng.normal(0, 1, (t, n)) * echelle * rng.uniform(0.5, 1.5, n)
+    return pd.DataFrame(
+        (f @ b.T + e) * 0.20 / np.sqrt(JOURS),
+        index=pd.bdate_range("2015-01-02", periods=t),
+        columns=[f"A{i:02d}" for i in range(n)],
+    )
+
+
+def test_le_chemin_de_calibration_a_une_ligne_par_rebalancement() -> None:
+    donnees = _marche_groupe(t=1_500)
+    r = walk_forward(donnees, MinimumVariance(ledoit_wolf), lookback=252,
+                     step=21)
+    chemin = r.calibration_path()
+
+    assert list(chemin.columns) == ["prédite", "réalisée", "rapport", "n_obs"]
+    assert 0 < len(chemin) <= r.n_rebalances
+    assert (chemin["prédite"] > 0).all()
+    assert (chemin["réalisée"] > 0).all()
+    assert chemin["n_obs"].max() <= 21
+
+
+def test_le_diagnostic_saccorde_avec_la_calibration_agregee() -> None:
+    """
+    ⚠️ LE BUG QUE CE TEST VERROUILLE.
+
+    La première version du diagnostic moyennait les VOLATILITÉS par
+    fenêtre et annonçait « calibration globale 1,02 » là où
+    `calibration()` disait 0,91, sous le même nom.
+
+    La moyenne des écarts-types n'est pas l'écart-type de l'ensemble :
+    par l'inégalité de Jensen, la seconde est toujours la plus grande,
+    et d'autant plus que les régimes diffèrent. Il faut agréger les
+    VARIANCES.
+
+    Deux méthodes du même objet qui rendent des chiffres différents
+    sous le même nom usent la confiance plus sûrement qu'une erreur
+    franche.
+    """
+    donnees = _marche_groupe(t=2_400, garch=True)
+    r = walk_forward(donnees, MinimumVariance(ledoit_wolf), lookback=252,
+                     step=21)
+
+    agregee = r.calibration()
+    assert agregee is not None
+    ligne = r.calibration_diagnosis().splitlines()[0]
+    valeur = float(ligne.split()[-1])
+
+    assert abs(valeur - agregee.value) < 0.05, (
+        f"le diagnostic annonce {valeur:.2f} et calibration() "
+        f"{agregee.value:.2f} — les deux doivent mesurer la même chose"
+    )
+
+
+def test_le_diagnostic_distingue_un_biais_uniforme_dun_biais_concentre() -> None:
+    """
+    CALIBRATION CONTRE UNE VÉRITÉ CONNUE, cette fois sur la FORME de
+    l'erreur plutôt que sur sa taille.
+
+    À volatilité constante, l'écart de calibration doit être réparti :
+    une tranche de 10 % des périodes porte environ 10 % de la variance.
+
+    À volatilité groupée, la même tranche en porte le triple — et la
+    calibration hors de ces périodes remonte au-dessus de 1. Le modèle
+    n'est alors pas biaisé : il est EN RETARD.
+
+    Les deux diagnostics appellent des remèdes opposés, et c'est pour
+    cela qu'il faut pouvoir les distinguer.
+    """
+    plat = walk_forward(
+        _marche_groupe(t=2_400, garch=False),
+        MinimumVariance(ledoit_wolf), lookback=252, step=21,
+    ).calibration_diagnosis()
+
+    groupe = walk_forward(
+        _marche_groupe(t=2_400, garch=True),
+        MinimumVariance(ledoit_wolf), lookback=252, step=21,
+    ).calibration_diagnosis()
+
+    assert "UNIFORME" in plat, plat
+    assert "CONCENTRÉ" in groupe, groupe
+    assert "EN RETARD" in groupe
+
+
+def test_le_chemin_refuse_une_strategie_qui_ne_predit_rien() -> None:
+    donnees = _marche_groupe(t=1_000)
+    r = walk_forward(donnees, EqualWeight(), lookback=252, step=21)
+    with pytest.raises(ValueError, match="n'annonce aucun risque"):
+        r.calibration_path()

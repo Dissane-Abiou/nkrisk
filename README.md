@@ -13,9 +13,10 @@ de répondre plutôt que de deviner.
 
 ```python
 from nkrisk import annualized_volatility, log_returns
-from nkrisk.data.market import load_yahoo
+from nkrisk.data import YahooSource
 
-vol = annualized_volatility(log_returns(load_yahoo("XIC.TO", start="2015-01-01")))
+prix = YahooSource().fetch("XIC.TO", start="2015-01-01")
+vol = annualized_volatility(log_returns(prix))
 print(vol.format(2, percent=True))
 # 14.82%  [IC 95% : 14.31% — 15.37%]  n=2634
 ```
@@ -36,8 +37,8 @@ sans avertissement.
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -q          # 165 tests rapides (~6 s)
-pytest tests/ -q -m ""    # 176 tests, couverture Monte Carlo incluse (~25 s)
+pytest tests/ -q          # 200 tests rapides (~8 s)
+pytest tests/ -q -m ""    # 212 tests, couverture Monte Carlo incluse (~30 s)
 ruff check src/ tests/ examples/
 mypy src/nkrisk
 ```
@@ -60,7 +61,9 @@ validation croisée)
 | `portfolio` | objet valeur gelé : poids + modèle de risque, validés une seule fois à la construction |
 | `stress` | moteur de scénarios — tout choc est une fonction Portefeuille → Portefeuille |
 | `backtest` | rejeu point-in-time strict, audit de causalité, coûts de transaction, Sharpe dégonflé |
-| `data` | générateurs synthétiques à vérité connue (GBM, Student-t corrélés) + chargeurs Yahoo/CSV |
+| `data.market` | sources injectables (Yahoo, CSV, mémoire) — testables sans réseau |
+| `data.quality` | détection d'anomalies, politiques d'alignement de calendriers, annualisation correcte |
+| `data.synthetic` | générateurs à vérité connue (GBM, Student-t corrélés) |
 
 ---
 
@@ -152,6 +155,20 @@ stratégie qui « garde les quatre meilleurs ». Le Sharpe dégonflé fait tombe
 probabilité que le résultat soit réel de 99,6 % à 10,3 %, sur exactement les
 mêmes rendements.
 
+**Le choix d'alignement des calendriers déplace le risque plus que bien des
+choix de modélisation.** Mesuré contre une vérité connue, à 10 % de séances non
+communes : reporter le dernier prix ne biaise pas les volatilités (−0,2 %) mais
+sous-estime la corrélation de 10,2 %, et donc le risque du portefeuille de
+4,2 %. Toujours dans le sens optimiste. L'intersection, elle, n'est biaisée que
+si on l'annualise par 252 alors qu'elle ne retient que 211 observations par an.
+
+**Sur de vraies actions, le modèle de risque annonce 0,79 fois le risque
+subi.** Mesuré sur douze titres de Toronto et New York, de 2015 à 2026 : la
+variance minimale sur Ledoit-Wolf sous-estime sa propre volatilité réalisée de
+21 %, contre 0,99 sur données simulées à volatilité constante. Le diagnostic
+intégré montre que l'écart est **concentré** : une fenêtre glissante voit la
+tempête une fois qu'elle est entrée dedans.
+
 **La VaR n'est pas une mesure de risque cohérente.** Deux obligations
 indépendantes à 4 % de défaut ont chacune une VaR à 95 % de zéro ; leur
 combinaison a une VaR de 0,5. La VaR affirme que diversifier crée du risque.
@@ -209,6 +226,37 @@ mensuel, la probabilité valait 1/21. En posant la sonde SUR la date de
 décision, toute avance ≥ 1 est vue. La sensibilité d'un détecteur ne vient pas
 de sa finesse, mais de l'endroit où on le pose.
 → `test_une_sonde_mal_placee_laisse_passer_la_fuite`
+
+**Une prédiction à moitié fausse sur un biais.** J'avais écrit que reporter le
+dernier prix connu, en injectant des rendements nuls, réduisait la variance ET
+la corrélation. La mesure a donné autre chose : la volatilité ne bouge
+quasiment pas, parce que les zéros la tirent vers le bas pendant que la séance
+suivante, qui absorbe le mouvement manqué, la tire vers le haut. Rien ne
+compense pour la corrélation. Le biais est donc entier là où il fait le plus de
+dégâts — la diversification apparente.
+→ `test_le_report_ne_biaise_pas_la_volatilite_mais_la_correlation`
+
+**« Ce n'est pas testable » était un mauvais diagnostic.** `data/market.py` est
+resté à 0 % de couverture pendant huit séances, avec cette justification : la
+fonction appelle le réseau. Faux — elle était intestable parce qu'elle
+*décidait* d'appeler le réseau. Une fois la source passée en paramètre, le
+module est passé à 87 % sans une ligne de test réseau, et il ne reste non
+couvert que l'adaptateur Yahoo, quinze lignes sans logique.
+
+**Deux causes additionnées sous un seul chiffre.** Le rapport de qualité
+annonçait « 7 % de dates non communes » sur le premier jeu de vraies données,
+en mélangeant une entrée en Bourse tardive et des jours fériés décalés entre
+places. Les remèdes sont opposés : on exclut un titre à l'historique trop
+court, on choisit une politique d'alignement pour des fériés. Un rapport qui
+additionne deux causes empêche de choisir la bonne.
+→ `test_un_historique_tronque_nest_pas_un_desalignement_de_calendrier`
+
+**Deux méthodes du même objet, un seul nom, deux chiffres.** Le diagnostic de
+calibration moyennait les volatilités par fenêtre et annonçait 1,02 là où
+`calibration()` disait 0,91. La moyenne des écarts-types n'est pas
+l'écart-type de l'ensemble — par Jensen, la seconde est toujours la plus
+grande. Il fallait agréger les variances.
+→ `test_le_diagnostic_saccorde_avec_la_calibration_agregee`
 
 La leçon commune : **un bug numérique ne lève pas d'exception.** Il produit un
 nombre plausible, du bon ordre de grandeur, et faux. La seule défense connue

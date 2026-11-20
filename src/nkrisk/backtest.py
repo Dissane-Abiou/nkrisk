@@ -308,6 +308,144 @@ class BacktestResult:
             ),
         )
 
+    def calibration_path(
+        self, periods_per_year: int = TRADING_DAYS_PER_YEAR
+    ) -> pd.DataFrame:
+        """
+        La calibration comme SÉRIE TEMPORELLE, et non comme un nombre.
+
+        Pour chaque rebalancement : le risque annoncé, le risque
+        effectivement subi jusqu'au rebalancement suivant, et leur
+        rapport.
+
+        POURQUOI UN SEUL CHIFFRE NE SUFFIT PAS
+        --------------------------------------
+        `calibration()` dit « le modèle a annoncé 0,79 fois le risque
+        subi ». Cela ne dit pas LA MÊME CHOSE selon que :
+
+          • le modèle sous-estime de 21 % à chaque période — c'est un
+            défaut systématique, et on peut le corriger par un facteur ;
+          • ou qu'il est juste 90 % du temps et complètement dépassé
+            pendant trois mois de crise — c'est le regroupement de
+            volatilité, et aucun facteur ne le corrige, parce que le
+            problème est que le modèle est EN RETARD, pas qu'il est
+            décalé.
+
+        Les deux diagnostics appellent des remèdes opposés. Le chiffre
+        agrégé ne permet pas de choisir ; cette série, si.
+
+        Les volatilités réalisées par fenêtre sont très bruitées — une
+        vingtaine d'observations chacune. On les lit en distribution,
+        jamais une par une.
+        """
+        if self.predicted_volatility is None or self.predicted_volatility.empty:
+            raise ValueError(
+                "cette stratégie n'annonce aucun risque : il n'y a rien à "
+                "calibrer. Seules les stratégies qui satisfont `PredictsRisk` "
+                "en produisent."
+            )
+
+        dates = list(self.predicted_volatility.index)
+        lignes = []
+        for i, debut in enumerate(dates):
+            fin = dates[i + 1] if i + 1 < len(dates) else None
+            fenetre = (
+                self.returns.loc[debut:]
+                if fin is None
+                else self.returns.loc[debut:fin].iloc[:-1]
+            )
+            if len(fenetre) < 2:
+                continue
+            realisee = float(
+                np.std(fenetre.to_numpy(), ddof=1) * np.sqrt(periods_per_year)
+            )
+            predite = float(self.predicted_volatility.loc[debut])
+            lignes.append(
+                {
+                    "prédite": predite,
+                    "réalisée": realisee,
+                    "rapport": predite / realisee if realisee > 0 else np.nan,
+                    "n_obs": len(fenetre),
+                }
+            )
+        return pd.DataFrame(lignes, index=pd.Index(dates[: len(lignes)],
+                                                   name="rebalancement"))
+
+    def calibration_diagnosis(
+        self,
+        periods_per_year: int = TRADING_DAYS_PER_YEAR,
+        quantile: float = 0.10,
+    ) -> str:
+        """
+        Répond à une seule question : l'écart de calibration est-il
+        UNIFORME ou CONCENTRÉ sur quelques périodes agitées ?
+
+        Les deux diagnostics appellent des remèdes opposés. Un biais
+        uniforme se corrige par un facteur ; un modèle en retard sur les
+        changements de régime, non — il faut changer d'estimateur.
+
+        ⚠️ L'AGRÉGATION SE FAIT EN VARIANCE, PAS EN VOLATILITÉ.
+
+        La première version moyennait les volatilités par fenêtre et
+        annonçait « calibration globale 1,02 » là où `calibration()`
+        disait 0,91. Les deux ne mesuraient pas la même chose : la
+        moyenne des écarts-types n'est pas l'écart-type de l'ensemble.
+        Par Jensen, la seconde est toujours la plus grande, et d'autant
+        plus que les régimes diffèrent.
+
+        Deux méthodes du même objet, portant le même nom et rendant des
+        chiffres différents : c'est le genre d'incohérence qui use la
+        confiance plus sûrement qu'une erreur franche.
+
+        On agrège donc les variances, pondérées par le nombre
+        d'observations de chaque fenêtre — ce que fait `calibration()`.
+        """
+        chemin = self.calibration_path(periods_per_year)
+        if len(chemin) < 10:
+            return "pas assez de périodes pour diagnostiquer"
+
+        n = chemin["n_obs"].to_numpy(dtype=float)
+        var = chemin["réalisée"].to_numpy() ** 2
+        pred = chemin["prédite"].to_numpy()
+
+        seuil = float(np.quantile(chemin["réalisée"], 1.0 - quantile))
+        agitee = chemin["réalisée"].to_numpy() > seuil
+        calme = ~agitee
+
+        def rapport(masque: np.ndarray) -> float:
+            poids = n[masque]
+            return float(
+                pred[masque].mean()
+                / np.sqrt(np.average(var[masque], weights=poids))
+            )
+
+        part_variance = float(
+            np.sum(var[agitee] * n[agitee]) / np.sum(var * n)
+        )
+        part_periodes = float(agitee.mean())
+        global_ = rapport(np.ones(len(chemin), dtype=bool))
+        hors = rapport(calme)
+
+        concentre = part_variance > 2.5 * part_periodes
+        verdict = (
+            "CONCENTRÉ. Le modèle n'est pas biaisé, il est EN RETARD sur "
+            "les changements de régime : il voit la tempête une fois "
+            "qu'elle est dans sa fenêtre. Aucun facteur correctif ne "
+            "répare cela — il faut un estimateur qui réagit (EWMA, GARCH)."
+            if concentre
+            else "UNIFORME. Le biais ne dépend pas du régime. Cherche du "
+            "côté de l'estimateur lui-même ou de l'optimiseur."
+        )
+
+        return (
+            f"calibration globale                          {global_:.2f}\n"
+            f"calibration hors des {part_periodes:.0%} périodes agitées     "
+            f"{hors:.2f}\n"
+            f"part de la variance totale dans ces {part_periodes:.0%}   "
+            f"{part_variance:.0%}\n"
+            f"→ écart {verdict}"
+        )
+
     def summary(self, periods_per_year: int = TRADING_DAYS_PER_YEAR) -> str:
         lignes = [f"{self.strategy}  ({self.mode}, fenêtre {self.lookback}, "
                   f"{self.n_rebalances} rebalancements, {self.cost_bps:.0f} pb)"]
