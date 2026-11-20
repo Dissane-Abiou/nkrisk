@@ -351,3 +351,6 @@ Naive Diversification* · Michaud (1989), *The Markowitz Optimization Enigma*
 
 *Projet personnel. Aucun élément de ce dépôt ne constitue un conseil en
 investissement.*
+
+*Auteur et conditions d'attribution : [AUTEURS.md](AUTEURS.md) · Licence MIT —
+la réutilisation est libre, la conservation de la notice d'auteur est exigée.*
