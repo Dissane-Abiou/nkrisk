@@ -36,8 +36,8 @@ sans avertissement.
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -q          # 92 tests rapides (~3 s)
-pytest tests/ -q -m ""    # 97 tests, couverture Monte Carlo incluse (~10 s)
+pytest tests/ -q          # 133 tests rapides (~4 s)
+pytest tests/ -q -m ""    # 142 tests, couverture Monte Carlo incluse (~15 s)
 ruff check src/ tests/ examples/
 mypy src/nkrisk
 ```
@@ -56,6 +56,7 @@ validation croisée)
 | `risk` | décomposition du risque : contributions marginale et composante, ratio de diversification, nombre effectif de paris |
 | `var` | VaR et CVaR par trois méthodes, backtest de Kupiec, contre-exemple de sous-additivité |
 | `drawdown` | courbe sous l'eau, épisodes datés, indice d'ulcère, Calmar, distribution simulée du maximum |
+| `factors` | modèle à facteurs statistiques, nombre de facteurs par Marchenko-Pastur, attribution systématique / spécifique, scénarios de facteur |
 | `portfolio` | objet valeur gelé : poids + modèle de risque, validés une seule fois à la construction |
 | `stress` | moteur de scénarios — tout choc est une fonction Portefeuille → Portefeuille |
 | `data` | générateurs synthétiques à vérité connue (GBM, Student-t corrélés) + chargeurs Yahoo/CSV |
@@ -113,6 +114,25 @@ une distribution à queues épaisses a un quantile *plus faible* que la normale
 Kupiec à 99 % sur 1 500 jours ne rejette un modèle faux que 42 % du temps.
 Bâle impose ce test sur 250 jours.
 
+**Un modèle à facteurs bat la contraction, et l'écart grandit quand les
+données manquent.** Volatilité réalisée hors échantillon du portefeuille de
+variance minimale, contre Ledoit-Wolf : −9 % à N/T = 0,2, −17 % à N/T = 0,4,
+−36 % à N/T = 1,5 — régime où la covariance empirique est singulière et où il
+n'y a tout simplement pas de portefeuille à construire.
+
+**Mais quand son hypothèse est fausse, il devient sur-confiant.** Sur un
+univers sans structure à facteurs, l'avantage disparaît *et* le rapport
+risque prédit / risque réalisé tombe à 0,89, contre 1,05 pour Ledoit-Wolf. Se
+tromper en sous-estimant est la pire façon de se tromper pour un moteur de
+risque.
+
+**Du bruit pur n'a pas les valeurs propres qu'on croit.** Cent actifs
+indépendants sur 250 jours produisent un rapport de 21 entre la plus grande et
+la plus petite valeur propre de leur corrélation — alors que la vraie matrice
+est l'identité. Marchenko-Pastur prédit l'intervalle à 0,01 près. C'est ce qui
+permet de choisir le nombre de facteurs sans seuil arbitraire ; le taux de
+faux positifs mesuré est de 6,4 %.
+
 **La VaR n'est pas une mesure de risque cohérente.** Deux obligations
 indépendantes à 4 % de défaut ont chacune une VaR à 95 % de zéro ; leur
 combinaison a une VaR de 0,5. La VaR affirme que diversifier crée du risque.
@@ -121,8 +141,9 @@ combinaison a une VaR de 0,5. La VaR affirme que diversifier crée du risque.
 
 ## Les bugs que j'ai commis, et pourquoi ils sont documentés
 
-Quatre erreurs sont conservées dans le dépôt, avec le test de non-régression
-qui les verrouille. Elles ont plus de valeur pédagogique que le code correct.
+Les erreurs commises pendant la construction sont conservées dans le dépôt,
+chacune avec le test de non-régression qui la verrouille. Elles ont plus de
+valeur pédagogique que le code correct.
 
 **Un bug de convention silencieux.** Je comparais un rendement annualisé
 linéairement à un autre annualisé par composition. L'écart de convention
@@ -149,6 +170,16 @@ les nombres avaient été écrits à la main à partir d'une exécution antérie
 Toutes les narrations sont désormais calculées à partir des mêmes données que
 les tables.
 
+**Un estimateur qui ne converge pas là où je le croyais.** J'avais écrit le
+test évident : « l'erreur doit décroître quand l'historique s'allonge ». Il a
+échoué. À univers fixé, l'erreur de l'ACP PLAFONNE : le dernier quadruplement
+de l'historique ne gagne plus rien de mesurable. L'ACP n'est pas de l'analyse
+factorielle — elle suppose les variances spécifiques égales, et le biais qui en
+résulte dépend du nombre d'actifs, pas de la longueur de l'historique. Mesuré :
+quatre cents actions sur huit ans battent quinze actions sur deux siècles.
+→ `test_allonger_lhistorique_ne_fait_pas_converger_le_modele`,
+`test_un_grand_univers_bat_un_long_historique`
+
 La leçon commune : **un bug numérique ne lève pas d'exception.** Il produit un
 nombre plausible, du bon ordre de grandeur, et faux. La seule défense connue
 est de vérifier signe et ordre de grandeur contre une prédiction théorique
@@ -171,7 +202,10 @@ décisions leur font courir comme risque. Les décisions restent humaines.
 ## Références
 
 Ledoit & Wolf (2004), *A Well-Conditioned Estimator for Large-Dimensional
-Covariance Matrices* · Meucci (2009), *Managing Diversification* · Artzner,
+Covariance Matrices* · Laloux, Cizeau, Bouchaud & Potters (1999), *Noise
+Dressing of Financial Correlation Matrices* · Chamberlain & Rothschild (1983),
+*Arbitrage, Factor Structure, and Mean-Variance Analysis on Large Asset
+Markets* · Meucci (2009), *Managing Diversification* · Artzner,
 Delbaen, Eber & Heath (1999), *Coherent Measures of Risk* · Kupiec (1995),
 *Techniques for Verifying the Accuracy of Risk Measurement Models* · Lo (2002),
 *The Statistics of Sharpe Ratios* · Bailey & López de Prado (2014), *The
