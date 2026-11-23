@@ -38,8 +38,8 @@ sans avertissement.
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -q          # 262 tests rapides (~8 s)
-pytest tests/ -q -m ""    # 276 tests, couverture Monte Carlo incluse (~32 s)
+pytest tests/ -q          # 308 tests rapides (~10 s)
+pytest tests/ -q -m ""    # 326 tests, couverture Monte Carlo incluse (~30 s)
 ruff check src/ tests/ examples/
 mypy src/nkrisk
 ```
@@ -65,6 +65,7 @@ validation croisée)
 | `backtest` | rejeu point-in-time strict, audit de causalité, coûts de transaction, Sharpe dégonflé |
 | `data.market` | sources injectables (Yahoo, CSV, mémoire) — testables sans réseau |
 | `data.quality` | détection d'anomalies, politiques d'alignement de calendriers, annualisation correcte |
+| `validation` | statistique de biais, intervalle par blocs, fiche de modèle, inventaire — la validation indépendante du moteur par lui-même |
 | `data.synthetic` | générateurs à vérité connue (GBM, Student-t corrélés) |
 
 ---
@@ -289,6 +290,34 @@ marquait 1,57 là où il devait marquer 1,00, parce qu'il normalisait par la
 moyenne *théorique* d'un processus quasi intégré au lieu de sa moyenne
 d'échantillon.
 → `test_lavantage_de_lewma_ne_survit_pas_a_la_matrice`
+
+**Un oracle qui regardait le futur sans que ça se voie.** Pour mesurer si
+l'intervalle de confiance d'une statistique de biais est honnête, il faut un
+modèle correct *par construction*. J'avais pris « la racine de la vraie
+variance moyenne du bloc » : l'identité paraît imparable, la moyenne des h
+divisée par elle-même valant 1. Mais dans un GARCH, h_{t+1} dépend de e_t — la
+moyenne du bloc est donc en partie **causée** par les rendements qu'elle sert à
+normaliser, et E[X/Y] < E[X]/E[Y]. L'oracle marquait 0,936 au lieu de 1,000, et
+m'aurait fait publier que la statistique de biais est biaisée alors que le
+défaut était dans mon harnais. Quatrième oracle cassé du projet.
+→ `test_loracle_garch_est_un_vrai_oracle`
+
+**Un test écrit à l'envers, corrigé par la mesure.** J'avais asserté qu'un
+modèle ignorant les corrélations sous-estime toujours le risque d'un
+portefeuille équipondéré. Faux : le sens suit celui de la corrélation moyenne
+hors diagonale, et comme elle est multipliée par N−1 dans un portefeuille, une
+corrélation de −0,02 — indistinguable de zéro à l'œil — déplace la variance
+d'environ un tiers à N = 15.
+→ `test_le_sens_du_biais_dune_diagonale_suit_le_signe_des_correlations`
+
+**Une prose qui contredisait le tableau juste au-dessus d'elle.** La treizième
+dérive de narration, trouvée pendant la séance 12 et non après : j'avais écrit
+que la covariance empirique s'effondrerait dans le régime encombré, puis la
+mesure l'a déclarée VALIDÉE — parce qu'un portefeuille *fixe* n'inverse pas la
+matrice, et que l'inversion est ce qui amplifie le bruit. Le défaut était dans
+mon protocole de validation, et sa limite était déjà écrite dans la fiche que
+j'avais produite sans la lire.
+→ `test_les_deux_protocoles_rendent_des_verdicts_opposes_si_mal_conditionnee`
 
 La leçon commune : **un bug numérique ne lève pas d'exception.** Il produit un
 nombre plausible, du bon ordre de grandeur, et faux. La seule défense connue
