@@ -38,8 +38,8 @@ sans avertissement.
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -q          # 369 tests rapides (~15 s)
-pytest tests/ -q -m ""    # 390 tests, couverture Monte Carlo incluse (~50 s)
+pytest tests/ -q          # 405 tests rapides (~20 s)
+pytest tests/ -q -m ""    # 427 tests, couverture Monte Carlo incluse (~50 s)
 ruff check src/ tests/ examples/
 mypy src/nkrisk
 ```
@@ -67,6 +67,7 @@ validation croisée)
 | `data.quality` | détection d'anomalies, politiques d'alignement de calendriers, annualisation correcte |
 | `validation` | statistique de biais, intervalle par blocs, fiche de modèle, inventaire — la validation indépendante du moteur par lui-même |
 | `shortfall` | backtest d'Expected Shortfall (Acerbi-Székely), valeurs critiques simulées, perte de Fissler-Ziegel — la mesure que Bâle impose depuis FRTB |
+| `report` | réconcilie tous les instruments en un verdict unique, nomme les conflits et les interprète, et produit un rapport HTML autonome |
 | `data.synthetic` | générateurs à vérité connue (GBM, Student-t corrélés) |
 
 ---
@@ -339,6 +340,33 @@ est une t(3) fait passer les faux positifs de 5,0 % à 7,4 % — mais il est
 modéré, parce que le couple (VaR, ES) fixe déjà le rapport de queue et
 retire au problème l'essentiel de sa gravité.
 → `test_la_loi_nulle_depend_de_la_queue_mais_faiblement`
+
+**Un test que j'avais rendu aveugle, pour la troisième fois.** Le verdict
+de queue du rapport passait les résidus standardisés du modèle à
+l'hypothèse nulle empirique et coupait la vérification de cohérence de la
+séance 13. La nulle était donc la forme de queue *réalisée* : le test ne
+pouvait pas rejeter une forme mal annoncée, puisqu'il l'avait absorbée
+dans sa propre référence. Il validait tout. Séparé depuis en deux
+composantes indépendantes, la forme et le niveau.
+→ `test_le_verdict_de_queue_separe_la_forme_et_le_niveau`
+
+**Un seuil fixe là où il fallait une loi.** Le test de forme comparait le
+rapport ES/VaR réalisé à sa valeur théorique, avec une erreur-type
+obtenue par bootstrap — et rejetait des données parfaitement gaussiennes.
+J'ai d'abord attribué cela à un biais de petit échantillon ; la mesure
+m'a contredit, l'estimateur est pratiquement sans biais. Le coupable
+était la largeur : la loi de l'estimateur à n = 1 000 s'étale sur
+[1,13 ; 1,27] quand le bootstrap annonçait deux fois moins. Corrigé en
+comparant à la loi du *même estimateur* sous l'hypothèse nulle ; taux de
+déclenchement à tort mesuré ensuite à 4,8 % pour 5 % nominal.
+→ `test_le_test_de_forme_ne_se_declenche_pas_a_tort`
+
+**Une erreur de syntaxe masquée par un `.pyc`.** Une docstring dont la
+fermeture avait sauté : le module ne compilait plus, mais `import`
+réussissait en lisant du bytecode périmé, et j'ai cru pendant plusieurs
+minutes que le fichier était bon. C'est `ruff` qui l'a vu. Un cache qui
+réussit là où le source échoue est un piège d'outillage, pas de
+raisonnement — et il valait d'être noté.
 
 La leçon commune : **un bug numérique ne lève pas d'exception.** Il produit un
 nombre plausible, du bon ordre de grandeur, et faux. La seule défense connue

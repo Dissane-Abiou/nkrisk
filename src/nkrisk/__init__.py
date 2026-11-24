@@ -95,6 +95,12 @@ from .var import (
 )
 
 __version__ = "0.1.0"
+from .report import (
+    Conflict,
+    Finding,
+    ValidationReport,
+    build_report,
+)
 from .shortfall import (
     LEVEL_FRTB,
     AcerbiSzekelyResult,
@@ -146,6 +152,7 @@ __all__ = [
     "BacktestResult",
     "BiasTest",
     "Combined",
+    "Conflict",
     "CorrelationShock",
     "CovarianceEstimate",
     "CovarianceModel",
@@ -160,6 +167,7 @@ __all__ = [
     "FactorCovariance",
     "FactorModel",
     "FactorShock",
+    "Finding",
     "GaussianNull",
     "InsufficientData",
     "InsufficientStructure",
@@ -183,6 +191,7 @@ __all__ = [
     "TailComparison",
     "TailForecast",
     "TailRisk",
+    "ValidationReport",
     "VolatilityShock",
     "acerbi_szekely",
     "annualized_mean_return",
@@ -190,6 +199,7 @@ __all__ = [
     "attribute_risk",
     "bias_statistic",
     "build_inventory",
+    "build_report",
     "calmar_ratio",
     "compare_tail_models",
     "compound_annualize",

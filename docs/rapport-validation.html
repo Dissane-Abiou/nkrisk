@@ -1,0 +1,166 @@
+<!doctype html><html lang='fr'><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>Validation — 12 titres TSX / NYSE</title>
+<style>
+:root{--bg:#fbfaf8;--fg:#1a1a1a;--muted:#6b6b6b;--line:#e2ded8;--card:#fff;
+--ok:#1f7a4d;--warn:#9a6b00;--bad:#a8301a;--accent:#2d4a7c}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+--bg:#14161a;--fg:#e8e6e3;--muted:#9a9894;--line:#2a2e35;--card:#1b1e24;
+--ok:#4bbd84;--warn:#d9a441;--bad:#e2705c;--accent:#7aa2d8}}
+:root[data-theme="dark"]{--bg:#14161a;--fg:#e8e6e3;--muted:#9a9894;
+--line:#2a2e35;--card:#1b1e24;--ok:#4bbd84;--warn:#d9a441;--bad:#e2705c;
+--accent:#7aa2d8}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);margin:0;padding:48px 16px;
+font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:900px;margin:0 auto}
+h1{font-size:1.6rem;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:1.05rem;margin:40px 0 12px;text-transform:uppercase;
+letter-spacing:.08em;color:var(--muted);font-weight:600}
+.sub{color:var(--muted);font-size:.9rem;margin-bottom:32px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+padding:18px 20px;margin:12px 0}
+.conflict{border-left:3px solid var(--warn)}
+.conflict.perimetre{border-left-color:var(--bad)}
+.fam{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;
+color:var(--warn);font-weight:700}
+.conflict.perimetre .fam{color:var(--bad)}
+.subj{font-weight:600;margin:4px 0}
+.say{color:var(--muted);font-size:.88rem;margin:6px 0}
+.pre{white-space:pre-line}
+.interp{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:.88rem;margin-top:8px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:.75rem;
+text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;
+border-bottom:1px solid var(--line)}
+td{padding:9px 10px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:none}
+.v{font-weight:600;font-size:.82rem;white-space:nowrap}
+.v-ok{color:var(--ok)}.v-warn{color:var(--warn)}.v-bad{color:var(--bad)}
+.v-na{color:var(--muted)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem}
+.caveat{color:var(--bad);font-size:.88rem;margin:6px 0}
+.note{color:var(--muted);font-size:.84rem;border-top:1px solid var(--line);
+margin-top:40px;padding-top:16px}
+.kv{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
+.kv span{font-size:.82rem;color:var(--muted)}
+@media (max-width:640px){body{padding:28px 16px}
+table{display:block;overflow-x:auto}}
+</style></head><body><div class='wrap'>
+<h1>Rapport de validation — 12 titres TSX / NYSE</h1>
+<div class='sub'>12 actifs · 2834 observations · 2015-05-22 → 2026-11-23 · queue à 2.5% · produit le 2026-11-23 par <span class='mono'>nkrisk</span></div>
+<h2>Données — ce qui conditionne tout le reste</h2>
+<div class='card'>
+<div class='caveat'>⚠ SHOP.TO — démarrage tardif : commence le 2015-05-21, soit 97 date(s) après le plus ancien — en intersection, ce seul titre les ampute pour TOUT l&#x27;univers. L&#x27;exclure coûte peut-être moins cher.</div>
+<div class='caveat'>⚠ (univers) — calendriers désalignés : sur la fenêtre commune (2015-05-21 → 2026-11-23), 114 date(s) sur 2949 ne sont pas communes à tous (3.9%) — le choix d&#x27;alignement va changer tes chiffres</div>
+</div>
+<h2>Conflits entre instruments (5)</h2>
+<div class='card conflict perimetre'>
+<div class='fam'>PÉRIMÈTRE</div>
+<div class='subj'>2 actif(s) : (univers), SHOP.TO</div>
+<div class='say'>qualité → 2 anomalie(s)</div>
+<div class='say'>tous les autres → ont utilisé ces données</div>
+<div class='interp'>Tous les verdicts de ce rapport sont CONDITIONNELS à des données que le moteur lui-même tient pour suspectes. Les instruments en aval n&#x27;ont pas été restreints, et ne savent pas qu&#x27;ils auraient dû l&#x27;être.</div>
+</div>
+<div class='card conflict'>
+<div class='fam'>RÉGIME</div>
+<div class='subj'>les 4 modèles, sans exception</div>
+<div class='say'>NIVEAU / STABILITÉ → déclenché sur 4/4 modèles</div>
+<div class='interp'>Le conflit « NIVEAU / STABILITÉ » vise TOUS les modèles jugés. Il ne parle donc plus d&#x27;eux mais des données : c&#x27;est le régime qui a cette propriété, et aucun modèle de cette famille n&#x27;y tient. Les quatre constats ont été repliés en un seul, parce qu&#x27;un conflit qui vise tout le monde ne désigne personne.</div>
+</div>
+<div class='card conflict'>
+<div class='fam'>CORPS / QUEUE</div>
+<div class='subj'>empirique</div>
+<div class='say'>inventaire → VALIDÉ</div>
+<div class='say'>queue → REJETÉ</div>
+<div class='interp'>Le modèle décrit correctement les jours normaux et se trompe sur ceux qui comptent. Ce n&#x27;est pas une contradiction mais une décomposition — et c&#x27;est le profil exact d&#x27;un modèle qui rassure jusqu&#x27;au krach.</div>
+</div>
+<div class='card conflict'>
+<div class='fam'>CORPS / QUEUE</div>
+<div class='subj'>Ledoit-Wolf</div>
+<div class='say'>inventaire → VALIDÉ</div>
+<div class='say'>queue → REJETÉ</div>
+<div class='interp'>Le modèle décrit correctement les jours normaux et se trompe sur ceux qui comptent. Ce n&#x27;est pas une contradiction mais une décomposition — et c&#x27;est le profil exact d&#x27;un modèle qui rassure jusqu&#x27;au krach.</div>
+</div>
+<div class='card conflict'>
+<div class='fam'>CORPS / QUEUE</div>
+<div class='subj'>facteurs (Marchenko-Pastur)</div>
+<div class='say'>inventaire → VALIDÉ</div>
+<div class='say'>queue → REJETÉ</div>
+<div class='interp'>Le modèle décrit correctement les jours normaux et se trompe sur ceux qui comptent. Ce n&#x27;est pas une contradiction mais une décomposition — et c&#x27;est le profil exact d&#x27;un modèle qui rassure jusqu&#x27;au krach.</div>
+</div>
+<h2>Verdicts</h2><div class='card'>
+<table><thead><tr>
+<th>modèle</th>
+<th>inventaire</th>
+<th>protocole modèle</th>
+<th>queue</th>
+<th>VERDICT</th>
+<th>contraint par</th>
+</tr></thead><tbody>
+<tr>
+<td>empirique</td>
+<td><span class='v v-ok'>VALIDÉ</span></td>
+<td><span class='v v-ok'>VALIDÉ</span></td>
+<td><span class='v v-bad'>REJETÉ</span></td>
+<td><span class='v v-bad'>REJETÉ</span></td>
+<td>queue</td>
+</tr>
+<tr>
+<td>Ledoit-Wolf</td>
+<td><span class='v v-ok'>VALIDÉ</span></td>
+<td><span class='v v-ok'>VALIDÉ</span></td>
+<td><span class='v v-bad'>REJETÉ</span></td>
+<td><span class='v v-bad'>REJETÉ</span></td>
+<td>queue</td>
+</tr>
+<tr>
+<td>EWMA λ=0.94</td>
+<td><span class='v v-bad'>REJETÉ</span></td>
+<td><span class='v v-bad'>REJETÉ</span></td>
+<td><span class='v v-bad'>REJETÉ</span></td>
+<td><span class='v v-bad'>REJETÉ</span></td>
+<td>inventaire</td>
+</tr>
+<tr>
+<td>facteurs (Marchenko-Pastur)</td>
+<td><span class='v v-ok'>VALIDÉ</span></td>
+<td><span class='v v-ok'>VALIDÉ</span></td>
+<td><span class='v v-bad'>REJETÉ</span></td>
+<td><span class='v v-bad'>REJETÉ</span></td>
+<td>queue</td>
+</tr>
+</tbody></table>
+</div>
+<h2>Détail des constats</h2><div class='card'>
+<div class='subj'>empirique</div><div class='kv'>
+<span><b class='v-ok'>inventaire</b> biais 1.303</span>
+<span><b class='v-ok'>protocole modèle</b> biais 1.572 sur son propre portefeuille</span>
+<span><b class='v-bad'>queue</b> forme 1.786 contre [1.150—1.241] attendu à n=2582 (REJETÉ) · niveau Z₂ = -1.038 vs -0.914 (REJETÉ) · 86 dépassements pour 65 attendus</span>
+</div>
+<div class='subj'>Ledoit-Wolf</div><div class='kv'>
+<span><b class='v-ok'>inventaire</b> biais 1.324</span>
+<span><b class='v-ok'>protocole modèle</b> biais 1.477 sur son propre portefeuille</span>
+<span><b class='v-bad'>queue</b> forme 1.788 contre [1.150—1.241] attendu à n=2582 (REJETÉ) · niveau Z₂ = -1.122 vs -0.916 (REJETÉ) · 90 dépassements pour 65 attendus</span>
+</div>
+<div class='subj'>EWMA λ=0.94</div><div class='kv'>
+<span><b class='v-bad'>inventaire</b> biais 1.253</span>
+<span><b class='v-bad'>protocole modèle</b> biais 1.303 sur son propre portefeuille</span>
+<span><b class='v-bad'>queue</b> forme 1.594 contre [1.150—1.241] attendu à n=2582 (REJETÉ) · niveau Z₂ = -1.445 vs -0.639 (REJETÉ) · 117 dépassements pour 65 attendus</span>
+</div>
+<div class='subj'>facteurs (Marchenko-Pastur)</div><div class='kv'>
+<span><b class='v-ok'>inventaire</b> biais 1.237</span>
+<span><b class='v-ok'>protocole modèle</b> biais 1.968 sur son propre portefeuille</span>
+<span><b class='v-bad'>queue</b> forme 1.782 contre [1.150—1.241] attendu à n=2582 (REJETÉ) · niveau Z₂ = -0.817 vs -0.909 (VALIDÉ) · 77 dépassements pour 65 attendus</span>
+</div>
+</div>
+<h2>Contrôles transversaux</h2><div class='card'>
+<div class='say'><b>Causalité</b> — ✓ propre sur 3 sondes (écart max 0.0e+00)</div>
+<div class='say pre'><b>Concentration</b>
+calibration globale                          0.76
+calibration hors des 11% périodes agitées     1.01
+part de la variance totale dans ces 11%   50%
+→ écart CONCENTRÉ. Le modèle n&#x27;est pas biaisé, il est EN RETARD sur les changements de régime : il voit la tempête une fois qu&#x27;elle est dans sa fenêtre. Aucun facteur correctif ne répare cela — il faut un estimateur qui réagit (EWMA, GARCH).</div>
+</div>
+<div class='note'><b>Règle de conjonction.</b> Le verdict d'un modèle est le PIRE des verdicts rendus sur lui. Une absence de preuve ne compense pas une preuve : trois validations n'annulent pas un rejet, elles disent que le défaut est hors du champ de trois instruments. La colonne « contraint par » nomme l'instrument qui décide — c'est lui qui dit quoi réparer.<br><br><b>Seuil de dispersion</b> : 1.50 × le hasard. C'est une convention de gouvernance, pas une propriété des données.<br><br><b>Ce que ce rapport ne sait pas faire.</b> Il ne cherche que les conflits qu'on lui a appris à reconnaître. Deux instruments peuvent diverger d'une façon qu'il ne voit pas — exactement comme un test ne voit que ce que sa statistique regarde.</div>
+</div></body></html>

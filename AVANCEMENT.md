@@ -1,7 +1,7 @@
 # nkrisk — État d'avancement
 
 **Dépôt** · github.com/Dissane-Abiou/nkrisk
-**Dernière mise à jour** · 24 novembre 2026, après la séance 13
+**Dernière mise à jour** · 24 novembre 2026, après la séance 14
 
 > Ce fichier est le journal de bord du projet : ce qui existe, ce que
 > chaque séance a produit, ce qui ne marche pas encore, et ce qui vient
@@ -16,14 +16,14 @@
 
 | | |
 |---|---|
-| **Séances** | 13 |
-| **Commits** | 14, du 23 août au 24 novembre 2026 |
-| **Modules** | 16 |
-| **Lignes versionnées** | ~22 300, dont ~21 100 de Python |
-| **Répartition** | 8 986 source · 7 013 tests · 5 140 démonstrations |
-| **Tests** | 390 (369 rapides ~15 s · 21 Monte Carlo ~50 s) |
+| **Séances** | 14 |
+| **Commits** | 15, du 23 août au 24 novembre 2026 |
+| **Modules** | 17 |
+| **Lignes versionnées** | ~24 400, dont ~23 200 de Python |
+| **Répartition** | 10 016 source · 7 525 tests · 5 617 démonstrations |
+| **Tests** | 427 (405 rapides ~20 s · 22 Monte Carlo ~50 s) |
 | **Couverture** | 89 % |
-| **Analyse statique** | ruff et mypy sans erreur (18 fichiers) |
+| **Analyse statique** | ruff et mypy sans erreur (19 fichiers) |
 | **CI** | GitHub Actions, 4 travaux, Python 3.11 / 3.12 / 3.13 |
 | **Sécurité** | modèle de menace écrit, 40 tests d'attaque |
 | **Licence** | MIT, avec `AUTEURS.md` et obligation d'attribution |
@@ -36,7 +36,7 @@ paie la correction des signes propres de la séance 7.
 
 ---
 
-## 2. Les treize séances
+## 2. Les quatorze séances
 
 | # | Date | Sujet | Le résultat qui reste |
 |---|---|---|---|
@@ -53,6 +53,7 @@ paie la correction des signes propres de la séance 7.
 | 11 | 19 nov. | Pondération exponentielle | L'avantage est en temps, le coût est en dimension |
 | 12 | 22 nov. | Validation de modèles | Un angle mort appartient au protocole, pas au modèle |
 | 13 | 24 nov. | Backtest d'Expected Shortfall | La VaR se backteste sans rien supposer, l'ES non |
+| 14 | 24 nov. | Rapport de validation | Le moteur forme une opinion, et nomme ses propres conflits |
 
 ### Le détail, pour les séances qui portent le plus
 
@@ -118,9 +119,25 @@ dépendance distributionnelle résiduelle démolirait le test, elle fait
 passer les faux positifs de 5,0 % à 7,4 % au pire.
 → `src/nkrisk/shortfall.py`, `examples/seance13.py`, 64 tests
 
+**Séance 14 — le rapport de validation.** Aucune mesure nouvelle, et
+c'est assumé. Les treize séances précédentes savaient répondre à treize
+questions séparément ; le moteur n'avait jamais formé une opinion. Ce
+module réconcilie, sous une règle défendable — le verdict d'un modèle est
+le PIRE des verdicts rendus sur lui, parce qu'une absence de preuve ne
+compense pas une preuve — et expose `binding_instrument`, qui nomme
+l'instrument contraignant, donc ce qu'il faut réparer. Cinq familles de
+conflits, chacune avec son interprétation, et le périmètre en premier :
+quand la qualité des données signale des anomalies que les autres
+instruments ont ignorées, tous les verdicts deviennent conditionnels. Un
+conflit qui vise tous les modèles est replié en constat de régime, parce
+qu'il ne désigne plus personne. Sortie : un HTML autonome, lisible en
+soixante secondes par quelqu'un qui ne lira jamais le code.
+→ `src/nkrisk/report.py`, `examples/seance14.py`,
+`examples/rapport_reel.py`, 37 tests
+
 ---
 
-## 3. Les seize modules
+## 3. Les dix-sept modules
 
 | Module | Lignes | Couv. | Contenu |
 |---|---|---|---|
@@ -137,6 +154,7 @@ passer les faux positifs de 5,0 % à 7,4 % au pire.
 | `backtest` | 1 152 | 87 % | rejeu causal, audit, coûts, Sharpe dégonflé |
 | `validation` | 998 | 88 % | biais, intervalle par blocs, fiche, inventaire |
 | `shortfall` | 820 | 94 % | Acerbi-Székely, nulles explicites, perte de Fissler-Ziegel |
+| `report` | 1 010 | 92 % | réconciliation des instruments, conflits interprétés, HTML autonome |
 | `data.market` | 432 | 89 % | sources injectables, validées |
 | `data.quality` | 742 | 91 % | anomalies, alignement, annualisation |
 | `data.synthetic` | 288 | 81 % | générateurs à vérité connue |
@@ -151,7 +169,7 @@ parcourues. C'est le prochain trou à boucher, et il est petit.
 
 ## 4. Le registre des erreurs
 
-Vingt-six erreurs trouvées et corrigées, chacune verrouillée par un
+Vingt-neuf erreurs trouvées et corrigées, chacune verrouillée par un
 test de non-régression. C'est la partie du projet qui a le plus de
 valeur en entrevue, et c'est pour ça qu'on la garde.
 
@@ -183,6 +201,9 @@ valeur en entrevue, et c'est pour ça qu'on la garde.
 | 13 | **Trois formules de Fissler-Ziegel de mémoire** | Les trois réfutées par le test d'élicitabilité ; il a fallu redériver |
 | 13 | Prédiction trop pessimiste sur la loi nulle | L'effet est réel mais modéré : 5,0 % → 7,4 % |
 | 13 | `int(math.ceil(...))` — deuxième fois | RUF046 : `math.ceil` retourne déjà un entier |
+| 14 | **Un test rendu aveugle, troisième fois** | La nulle empirique était la forme réalisée : le test ne pouvait plus la rejeter |
+| 14 | Seuil fixe là où il fallait une loi | Le bootstrap mesurait la variance, pas la largeur réelle de l'estimateur |
+| 14 | Erreur de syntaxe masquée par un `.pyc` | `import` réussissait sur du bytecode périmé ; `ruff` l'a vue |
 
 **La leçon commune, et c'est la seule phrase à retenir de ce tableau :**
 un bug numérique ne lève pas d'exception. Il produit un nombre
@@ -214,6 +235,14 @@ confiance.
   `SECURITE.md` ; ce n'est pas fait.
 - **Pas de documentation générée.** Elle vit dans les docstrings et le
   README.
+- **Le rapport de validation n'a pas encore tourné sur de vraies
+  données.** `examples/rapport_reel.py` est écrit et testé sur données
+  synthétiques ; il demande un accès réseau à Yahoo Finance que
+  l'environnement de développement n'a pas. C'est la prochaine chose à
+  faire, et c'est la seule qui transforme le moteur en verdict.
+- **Le rapport ne cherche que les conflits qu'on lui a appris à
+  reconnaître.** Deux instruments peuvent diverger d'une façon qu'il ne
+  voit pas — même limite que les tests des séances 12 et 13.
 - **La comparaison de deux modèles de queue est anticonservatrice.**
   `compare_tail_models` ne corrige pas l'autocorrélation des
   différences de perte ; sa p-value est donc trop petite sur données
@@ -225,26 +254,29 @@ confiance.
 
 Par ordre de valeur décroissante, telle que je la vois aujourd'hui.
 
-1. **Correction HAC (Newey-West) sur `compare_tail_models`.** La
+1. **Lancer `examples/rapport_reel.py`** sur douze titres TSX/NYSE et
+   publier `docs/rapport-validation.html`. C'est la seule tâche de cette
+   liste qui change ce qu'un lecteur extérieur peut voir du projet.
+2. **Correction HAC (Newey-West) sur `compare_tail_models`.** La
    p-value de la comparaison de deux modèles de queue ne corrige pas
    l'autocorrélation des différences de perte : elle est donc trop
    petite sur données réelles à volatilité groupée. C'est déclaré dans
    la docstring, ce qui est honnête mais pas suffisant.
-2. **Le test de Christoffersen** (indépendance des dépassements), que la
+3. **Le test de Christoffersen** (indépendance des dépassements), que la
    séance 3 avait explicitement mis hors périmètre. Kupiec ne voit pas
    si les dépassements sont groupés, et un modèle qui produit tous les
    siens pendant la même semaine de krach le passe.
-3. **Protocole de validation pour les scénarios de stress.** La
+4. **Protocole de validation pour les scénarios de stress.** La
    séance 12 valide les covariances, la séance 13 les queues. Le stress
    reste sans protocole, et le trou est nommé.
-4. **Boucher `covariance` à 70 %.** Petit, rapide, et ça remonte la
+5. **Boucher `covariance` à 70 %.** Petit, rapide, et ça remonte la
    couverture globale.
-5. **Une seconde confrontation aux vraies données**, avec l'inventaire
+6. **Une seconde confrontation aux vraies données**, avec l'inventaire
    de modèles de la séance 12 et le backtest d'ES de la séance 13. On
    sait déjà que la calibration vaut 0,79 ; on ne sait pas lequel des
    quatre estimateurs s'en sort le mieux sur le portefeuille qu'il
    recommande, ni si sa queue tient.
-6. **Épingler les actions de la CI par SHA.** Dix minutes, et ça ferme
+7. **Épingler les actions de la CI par SHA.** Dix minutes, et ça ferme
    un point du modèle de menace.
 
 ---
@@ -291,11 +323,12 @@ pytest -q -m "" --cov=src/nkrisk --cov-report=term
 ruff check src/ tests/ examples/
 mypy src/nkrisk
 
-python examples/seance13.py   # la dernière séance
+python examples/seance14.py   # la dernière séance
+python examples/rapport_reel.py      # le rapport sur vraies actions (réseau)
 python examples/donnees_reelles.py   # demande le réseau (yfinance)
 ```
 
-Les démonstrations `examples/seance1.py` à `seance13.py` se lisent dans
+Les démonstrations `examples/seance1.py` à `seance14.py` se lisent dans
 l'ordre : chacune raconte ce qu'elle a mesuré, y compris quand la mesure
 a contredit ce que j'avais prédit.
 
