@@ -38,8 +38,8 @@ sans avertissement.
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -q          # 308 tests rapides (~10 s)
-pytest tests/ -q -m ""    # 326 tests, couverture Monte Carlo incluse (~30 s)
+pytest tests/ -q          # 369 tests rapides (~15 s)
+pytest tests/ -q -m ""    # 390 tests, couverture Monte Carlo incluse (~50 s)
 ruff check src/ tests/ examples/
 mypy src/nkrisk
 ```
@@ -66,6 +66,7 @@ validation croisée)
 | `data.market` | sources injectables (Yahoo, CSV, mémoire) — testables sans réseau |
 | `data.quality` | détection d'anomalies, politiques d'alignement de calendriers, annualisation correcte |
 | `validation` | statistique de biais, intervalle par blocs, fiche de modèle, inventaire — la validation indépendante du moteur par lui-même |
+| `shortfall` | backtest d'Expected Shortfall (Acerbi-Székely), valeurs critiques simulées, perte de Fissler-Ziegel — la mesure que Bâle impose depuis FRTB |
 | `data.synthetic` | générateurs à vérité connue (GBM, Student-t corrélés) |
 
 ---
@@ -318,6 +319,26 @@ matrice, et que l'inversion est ce qui amplifie le bruit. Le défaut était dans
 mon protocole de validation, et sa limite était déjà écrite dans la fiche que
 j'avais produite sans la lire.
 → `test_les_deux_protocoles_rendent_des_verdicts_opposes_si_mal_conditionnee`
+
+**Trois formules de mémoire, trois réfutations.** La perte de
+Fissler-Ziegel est le seul score dont l'espérance est minimisée au vrai
+couple (VaR, ES) — c'est la définition de l'élicitabilité conjointe, donc
+c'est *testable*. Mes trois premières écritures de cette formule, toutes
+tirées de la mémoire, ont échoué ce test : leur minimum tombait au bord
+de la grille. Il a fallu la redériver depuis la forme générale de
+Fissler & Ziegel (2016) pour obtenir un minimum exactement à la vérité.
+Une formule qu'on peut tester ne doit jamais être recopiée de mémoire.
+→ `test_la_perte_fz_est_minimisee_a_la_verite`
+
+**Une prédiction trop pessimiste, mesurée et corrigée.** J'avais annoncé
+que la dépendance distributionnelle démolirait le backtest d'ES : la loi
+nulle d'une statistique d'ES dépend de la forme de la queue, là où
+Kupiec s'appuie sur une binomiale qui ne dépend que de α. L'effet est
+réel et va dans le mauvais sens — supposer la normalité quand la vérité
+est une t(3) fait passer les faux positifs de 5,0 % à 7,4 % — mais il est
+modéré, parce que le couple (VaR, ES) fixe déjà le rapport de queue et
+retire au problème l'essentiel de sa gravité.
+→ `test_la_loi_nulle_depend_de_la_queue_mais_faiblement`
 
 La leçon commune : **un bug numérique ne lève pas d'exception.** Il produit un
 nombre plausible, du bon ordre de grandeur, et faux. La seule défense connue
