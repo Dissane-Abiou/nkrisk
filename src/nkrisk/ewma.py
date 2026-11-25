@@ -135,7 +135,12 @@ def ewma_weights(n_obs: int, decay: float) -> np.ndarray:
         raise ValueError("au moins une observation")
     ages = np.arange(n_obs - 1, -1, -1, dtype=float)
     w = decay**ages
-    return w / w.sum()
+    # `np.asarray(..., dtype=float)` plutôt que `w / w.sum()` nu : selon
+    # la version de numpy, les stubs rendent ici `Any` ou un `ndarray`
+    # typé, et `mypy --strict` accepte ou refuse en conséquence. Le
+    # défaut a été trouvé sur une machine avec numpy 2.4.4 alors que
+    # l'analyse passait avec 2.5.3 — voir la note du CHANGELOG.
+    return np.asarray(w / w.sum(), dtype=float)
 
 
 def effective_sample_size(decay: float, n_obs: int | None = None) -> float:

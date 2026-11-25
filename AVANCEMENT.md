@@ -260,7 +260,7 @@ parcourues. C'est le prochain trou à boucher, et il est petit.
 
 ## 4. Le registre des erreurs
 
-Trente-quatre erreurs trouvées et corrigées, chacune verrouillée par un
+Trente-cinq erreurs trouvées et corrigées, chacune verrouillée par un
 test de non-régression. C'est la partie du projet qui a le plus de
 valeur en entrevue, et c'est pour ça qu'on la garde.
 
@@ -300,6 +300,7 @@ valeur en entrevue, et c'est pour ça qu'on la garde.
 | 15 | `mypy` n'était pas strict | « sans erreur » reposait sur deux options ; 14 corrections réelles |
 | 15 | `py.typed` absent | 10 000 lignes d'annotations invisibles pour qui installe le paquet |
 | 15 | **Une correction pire que le défaut** | La version lue depuis `importlib.metadata` dépendait de `sys.path` ; le test de cohérence passait au vert |
+| 15 | « mypy strict propre » dépendait de numpy | Passait avec numpy 2.5.3, échouait avec 2.4.4 : les stubs changent |
 
 **La leçon commune, et c'est la seule phrase à retenir de ce tableau :**
 un bug numérique ne lève pas d'exception. Il produit un nombre
@@ -334,6 +335,12 @@ confiance.
 - **Cinq modules dépassent encore 800 lignes** : `validation` (998),
   `backtest` (953), `factors` (929), `shortfall` (894), `report` (862).
   Deux scissions ont été faites à la séance 15 ; les autres attendent.
+- **Toute propriété vérifiée par un outil dépend de la version de cet
+  outil et de ses stubs.** Deux fois en une séance, une affirmation vraie
+  sur une machine s'est révélée fausse sur l'autre : la version lue
+  depuis les métadonnées, puis l'analyse de types. La CI couvre
+  désormais les deux cas, mais le principe reste : une propriété
+  vérifiée dans un seul environnement n'est vérifiée nulle part.
 - **Les actions de la CI restent épinglées par étiquette mutable.** La
   marche à suivre est dans `SECURITE.md` ; elle demande un accès à
   l'API GitHub que l'environnement de développement n'a pas.

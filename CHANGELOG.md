@@ -70,6 +70,13 @@ les propriétés du paquet en tant que **bibliothèque** qui changent.
   `python -c` annonçait 0.1.0 pendant que la suite voyait 0.2.0 — **et
   le test de cohérence passait au vert**. Remplacer une duplication par
   un mécanisme n'est pas gratuit.
+- **Deux retours `Any` que l'analyse ne voyait pas ici.** `mypy --strict`
+  passait avec numpy 2.5.3 et trouvait deux erreurs avec numpy 2.4.4 :
+  les **stubs de numpy changent d'une version à l'autre**, donc
+  « mypy strict sans erreur » n'est pas une propriété du code seul mais
+  du code ET de ses dépendances. Trouvé en livrant, sur une autre
+  machine. `mypy` tourne désormais sur toute la matrice de CI, et plus
+  seulement sur une version.
 - **Performance : un rapport complet passe de 3,8 s à 2,0 s.**
   `EmpiricalNull.draw` recalculait un `np.quantile` sur l'intégralité
   du tableau de résidus à chaque tirage — 24 021 fois pour un seul

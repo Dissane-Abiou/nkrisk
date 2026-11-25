@@ -403,7 +403,7 @@ def _loi_du_ratio_sous_h0(
     with np.errstate(invalid="ignore", divide="ignore"):
         es = -sommes / np.maximum(comptes, 1)
         ratios = es / (-seuils.ravel())
-    return ratios[np.isfinite(ratios)]
+    return np.asarray(ratios[np.isfinite(ratios)], dtype=float)
 
 
 @dataclass(frozen=True)
