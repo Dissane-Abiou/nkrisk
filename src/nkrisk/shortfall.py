@@ -110,14 +110,14 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
-from .types import InsufficientData
+from .types import InsufficientData, value_equal
 from .var import TailRisk
 
 #: Niveau de l'Expected Shortfall retenu par Bâle (FRTB) : queue de 2,5 %.
@@ -140,7 +140,7 @@ RATIO_TOLERANCE = 0.05
 # ══════════════════════════════════════════════════════════════════════
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class TailForecast:
     """
     Un chemin de prévisions (VaR, ES), validé à la construction.
@@ -197,6 +197,11 @@ class TailForecast:
                 "est la moyenne des pertes qui dépassent la VaR, donc elle "
                 "ne peut pas lui être inférieure : il y a un bug en amont."
             )
+
+    def __eq__(self, autre: object) -> bool:
+        if autre.__class__ is not self.__class__:
+            return NotImplemented
+        return value_equal(self, autre)
 
     @property
     def n_forecasts(self) -> int:
@@ -303,7 +308,7 @@ class StudentTNull:
         return rng.standard_t(self.nu, size=size) / (-q)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class EmpiricalNull:
     """
     Rééchantillonnage des résidus standardisés du modèle lui-même.
@@ -325,6 +330,11 @@ class EmpiricalNull:
 
     residuals: np.ndarray
     name: str = "empirique (rééchantillonnage)"
+    #: Cache interne, exclu de l'égalité et de la représentation : il
+    #: n'appartient pas à l'identité de l'objet, seulement à son coût.
+    _cache: dict[float, np.ndarray] = field(
+        default_factory=dict, compare=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         r = np.asarray(self.residuals, dtype=float).ravel()
@@ -340,14 +350,51 @@ class EmpiricalNull:
             )
         object.__setattr__(self, "residuals", r)
 
+    def __eq__(self, autre: object) -> bool:
+        if autre.__class__ is not self.__class__:
+            return NotImplemented
+        return value_equal(self, autre)
+
     def _standardise(self, alpha: float) -> np.ndarray:
+        """
+        Résidus divisés par leur propre VaR empirique, pour que leur
+        VaR au niveau alpha vaille exactement 1.
+
+        ⚠️ CE RÉSULTAT EST MIS EN CACHE, ET C'EST UNE CORRECTION DE BUG.
+
+        `draw` est appelé une fois par trajectoire simulée — plusieurs
+        milliers de fois pour une seule valeur critique. La version
+        d'origine recalculait ici un `np.quantile` sur l'intégralité du
+        tableau de résidus à CHAQUE appel, alors que le résultat ne
+        dépend que de `self` et d'`alpha`, tous deux constants pendant
+        la simulation.
+
+        Le profilage de la séance 15 l'a chiffré : 24 021 appels à
+        `np.quantile` sur le même tableau, 2,67 secondes sur 5,24 —
+        **plus de la moitié du temps d'un rapport passée à recalculer
+        un invariant.**
+
+        Le cache est un dictionnaire par `alpha`, posé via
+        `object.__setattr__` parce que la classe est gelée. L'objet
+        reste immuable du point de vue de l'appelant : le cache ne
+        change aucune valeur observable, il évite seulement de les
+        recalculer. `test_le_cache_ne_change_aucun_resultat` le
+        verrouille.
+        """
+        cache: dict[float, np.ndarray] = self._cache
+        connu = cache.get(alpha)
+        if connu is not None:
+            return connu
+
         q = float(np.quantile(self.residuals, alpha))
         if q >= 0.0:
             raise ValueError(
                 f"le quantile {alpha:.1%} des résidus vaut {q:.4g} ≥ 0 : ces "
                 "résidus ne ressemblent pas à des rendements centrés."
             )
-        return self.residuals / (-q)
+        standardises = self.residuals / (-q)
+        cache[alpha] = standardises
+        return standardises
 
     def ratio(self, alpha: float) -> float:
         u = self._standardise(alpha)
@@ -670,7 +717,8 @@ def fz_loss(
 
     v, e, a = forecast.var, forecast.es, forecast.alpha
     depassement = x <= -v
-    return -(1.0 / (a * e)) * depassement * (x + v) + v / e + np.log(e)
+    perte = -(1.0 / (a * e)) * depassement * (x + v) + v / e + np.log(e)
+    return np.asarray(perte, dtype=float)
 
 
 @dataclass(frozen=True)

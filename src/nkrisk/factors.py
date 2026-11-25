@@ -177,6 +177,7 @@ import pandas as pd
 
 from .covariance import CovarianceEstimate
 from .portfolio import Portfolio
+from .types import value_equal
 
 TRADING_DAYS_PER_YEAR = 252
 
@@ -252,7 +253,7 @@ def n_significant_factors(
 # ══════════════════════════════════════════════════════════════════════
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class FactorModel:
     """
     Un modèle à facteurs statistiques estimé par décomposition spectrale.
@@ -307,6 +308,11 @@ class FactorModel:
             raise ValueError("volatilité nulle ou négative")
 
     # ── dimensions ───────────────────────────────────────────────────
+    def __eq__(self, autre: object) -> bool:
+        if autre.__class__ is not self.__class__:
+            return NotImplemented
+        return value_equal(self, autre)
+
     @property
     def n_factors(self) -> int:
         return int(self.exposures.shape[1])
@@ -642,7 +648,7 @@ def _validate(returns: pd.DataFrame) -> np.ndarray:
     x = returns.to_numpy(dtype=float)
     if x.ndim != 2 or x.shape[1] < 2:
         raise ValueError("au moins 2 actifs requis")
-    return x
+    return np.asarray(x, dtype=float)
 
 
 # ══════════════════════════════════════════════════════════════════════

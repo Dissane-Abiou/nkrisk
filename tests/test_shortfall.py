@@ -18,6 +18,7 @@ import math
 import numpy as np
 import pandas as pd
 import pytest
+from conftest import prevision_garch_causale
 from scipy import stats
 
 from nkrisk.shortfall import (
@@ -38,6 +39,16 @@ from nkrisk.shortfall import (
 )
 from nkrisk.types import InsufficientData
 from nkrisk.var import TailRisk, historical_var, kupiec_test, parametric_var
+
+
+def _prevision_bloc(h: np.ndarray, n: int, bloc: int) -> np.ndarray:
+    """Chemin de prévisions GARCH causales, bloc par bloc."""
+    sortie = np.empty(n)
+    for d in range(0, n, bloc):
+        f = min(d + bloc, n)
+        sortie[d:f] = prevision_garch_causale(h, d, f - d)
+    return sortie
+
 
 ALPHA = LEVEL_FRTB
 

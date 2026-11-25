@@ -253,7 +253,7 @@ def calmar_ratio(prices: pd.Series,
     mdd = abs(max_drawdown(prices).depth)
     if mdd < 1e-12:
         raise ValueError("drawdown nul : le ratio de Calmar n'est pas défini")
-    return annuel / mdd
+    return float(annuel / mdd)
 
 
 def expected_max_drawdown(

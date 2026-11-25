@@ -25,6 +25,11 @@ import math
 import numpy as np
 import pandas as pd
 import pytest
+from conftest import (
+    prevision_garch_causale,
+    trajectoire_garch,
+    univers_facteurs,
+)
 
 from nkrisk.backtest import MinimumVariance, walk_forward
 from nkrisk.covariance import CovarianceEstimate, sample_covariance
@@ -62,25 +67,26 @@ def univers(
     loadings_positifs: bool = False,
 ) -> pd.DataFrame:
     """
-    Rendements à structure de facteurs connue, volatilité constante.
+    Alias local sur le générateur partagé de `conftest.py`.
 
-    `loadings_positifs=True` donne à tous les actifs une exposition de
-    même signe — le cas d'un facteur de marché, où les corrélations
-    sont toutes positives. Par défaut les signes sont aléatoires, donc
-    la corrélation moyenne est voisine de zéro : deux régimes très
-    différents, et certains tests ont besoin des deux.
+    Les SIGNATURES diffèrent d'un fichier de tests à l'autre — ordre des
+    arguments, valeurs par défaut — parce qu'elles ont divergé avant que
+    le générateur ne soit mis en commun. On garde l'alias plutôt que de
+    réécrire cent appels : ce qui comptait était de supprimer le CORPS
+    dupliqué, pas d'uniformiser les habitudes d'appel.
+
+    ⚠️ `loadings_positifs=False` ici, contre `True` ailleurs : ce fichier
+    a été écrit sur des expositions à signes aléatoires, où la
+    corrélation moyenne est voisine de zéro. Le sens de plusieurs
+    résultats s'inverse entre les deux régimes — voir
+    `test_le_sens_du_biais_dune_diagonale_suit_le_signe_des_correlations`.
     """
-    g = np.random.default_rng(graine)
-    expositions = g.normal(0.0, 0.5, (n_actifs, n_facteurs))
-    if loadings_positifs:
-        expositions = np.abs(expositions)
-    facteurs = g.normal(0.0, 1.0, (n_periodes, n_facteurs))
-    specifique = g.normal(0.0, 1.0, (n_periodes, n_actifs))
-    brut = (facteurs @ expositions.T + specifique) * 0.01
-    return pd.DataFrame(
-        brut,
-        index=pd.bdate_range("2018-01-02", periods=n_periodes),
-        columns=[f"A{i:02d}" for i in range(n_actifs)],
+    return univers_facteurs(
+        n_actifs,
+        graine,
+        n_facteurs=n_facteurs,
+        n_periodes=n_periodes,
+        loadings_positifs=loadings_positifs,
     )
 
 
@@ -793,31 +799,12 @@ def test_un_historique_plus_court_que_le_lookback_leve_insufficient_data():
 #  NIVEAU 3 — couverture Monte Carlo de l'INTERVALLE
 # ══════════════════════════════════════════════════════════════════════
 
-ALPHA_GARCH, BETA_GARCH, OMEGA_GARCH = 0.09, 0.90, 0.01
-PERSISTANCE = ALPHA_GARCH + BETA_GARCH
-
-
-def _trajectoire_garch(graine: int, n: int, nu: int | None = None):
-    g = np.random.default_rng(graine)
-    h = np.empty(n)
-    e = np.empty(n)
-    h[0] = 1.0
-    echelle = 1.0 if nu is None else math.sqrt((nu - 2) / nu)
-    for t in range(n):
-        u = g.normal() if nu is None else g.standard_t(nu) * echelle
-        e[t] = u * math.sqrt(h[t])
-        if t + 1 < n:
-            h[t + 1] = OMEGA_GARCH + ALPHA_GARCH * e[t] ** 2 + BETA_GARCH * h[t]
-    return e, h
-
-
-def _prevision_causale(h: np.ndarray, n: int, bloc: int) -> np.ndarray:
-    """Prévision GARCH à k pas : n'utilise que h[début de bloc]."""
+def _prevision_bloc(h: np.ndarray, n: int, bloc: int) -> np.ndarray:
+    """Chemin de prévisions GARCH causales, bloc par bloc."""
     s = np.empty(n)
     for d in range(0, n, bloc):
         f = min(d + bloc, n)
-        poids = float(np.mean([PERSISTANCE**j for j in range(1, f - d + 1)]))
-        s[d:f] = math.sqrt(1.0 + poids * (h[d] - 1.0))
+        s[d:f] = prevision_garch_causale(h, d, f - d)
     return s
 
 
@@ -839,8 +826,8 @@ def test_loracle_garch_est_un_vrai_oracle():
     n, bloc, n_sim = 1008, 21, 300
     total = 0.0
     for i in range(n_sim):
-        e, h = _trajectoire_garch(3000 + i, n)
-        test = bias_statistic(e, _prevision_causale(h, n, bloc), block_size=bloc)
+        e, h = trajectoire_garch(3000 + i, n)
+        test = bias_statistic(e, _prevision_bloc(h, n, bloc), block_size=bloc)
         total += test.bias.value**2
     assert total / n_sim == pytest.approx(1.0, abs=0.02)
 
@@ -881,8 +868,8 @@ def test_la_formule_classique_sous_couvre_sur_un_marche_realiste():
     n, bloc, n_sim, nu = 1008, 21, 400, 5
     dans_robuste = dans_naif = 0
     for i in range(n_sim):
-        e, h = _trajectoire_garch(4000 + i, n, nu=nu)
-        s = _prevision_causale(h, n, bloc)
+        e, h = trajectoire_garch(4000 + i, n, nu=nu)
+        s = _prevision_bloc(h, n, bloc)
         test = bias_statistic(e, s, block_size=bloc, confidence=0.95)
         if test.bias.ci_low <= 1.0 <= test.bias.ci_high:
             dans_robuste += 1

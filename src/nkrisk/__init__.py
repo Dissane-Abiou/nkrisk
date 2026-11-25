@@ -2,21 +2,48 @@
 
 Principe directeur : aucune fonction ne retourne un nombre nu.
 Tout retourne un `Estimate`, qui transporte son incertitude.
+
+CE QUI EST PUBLIC
+-----------------
+**Ce qui est importable depuis `nkrisk` directement est l'API
+publique.** Ce qui exige d'importer un sous-module —
+`nkrisk.report.SEVERITE`, `nkrisk.validation.MIN_BLOCKS` — est un
+détail d'implémentation et peut changer sans préavis. Les noms
+préfixés d'un `_` ne sont jamais publics, où qu'ils soient.
+
+**Tant que la version majeure est `0`, aucune API n'est garantie.** La
+politique complète, avec les trois engagements que le projet tient
+malgré tout, est dans `CHANGELOG.md`. Toute rupture y est écrite avec
+sa note de migration ; une rupture non documentée est un bogue.
 """
+
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _version
+
+try:
+    #: Version du paquet, LUE DEPUIS LES MÉTADONNÉES D'INSTALLATION.
+    #:
+    #: Elle n'est pas écrite ici en dur, et c'est délibéré : ce fichier
+    #: portait jusqu'à la séance 15 **deux** affectations de
+    #: `__version__`, à vingt lignes d'écart, dont la seconde écrasait
+    #: silencieusement la première. Une valeur recopiée est une valeur
+    #: qui dérive ; `pyproject.toml` est la seule source.
+    #:
+    #: Le repli ne sert qu'au cas où le paquet est exécuté depuis les
+    #: sources sans avoir été installé.
+    __version__ = _version("nkrisk")
+except PackageNotFoundError:  # pragma: no cover - exécution hors installation
+    __version__ = "0.0.0+inconnu"
 
 from .backtest import (
     BacktestResult,
-    DeflatedSharpe,
     EqualWeight,
     LookaheadAudit,
     MinimumVariance,
     PredictsRisk,
     Probe,
     Strategy,
-    deflated_sharpe_ratio,
     detect_lookahead,
-    expected_maximum_sharpe,
-    minimum_track_record_length,
     walk_forward,
 )
 from .covariance import CovarianceEstimate, ledoit_wolf, sample_covariance
@@ -50,6 +77,12 @@ from .factors import (
     pca_factor_model,
 )
 from .portfolio import Portfolio, equal_weighted
+from .report import (
+    Conflict,
+    Finding,
+    ValidationReport,
+    build_report,
+)
 from .returns import (
     TRADING_DAYS_PER_YEAR,
     annualized_mean_return,
@@ -68,38 +101,11 @@ from .risk import (
     minimum_variance_weights,
     portfolio_volatility,
 )
-from .stress import (
-    CHOC_LIQUIDITE,
-    CRISE_2008,
-    DECORRELATION,
-    HAUSSE_TAUX,
-    SCENARIOS_STANDARD,
-    Combined,
-    CorrelationShock,
-    PriceShock,
-    Shock,
-    StressResult,
-    VolatilityShock,
-    stress,
-    stress_table,
-)
-from .types import Estimate, InsufficientData
-from .var import (
-    KupiecResult,
-    TailRisk,
-    cornish_fisher_var,
-    historical_var,
-    kupiec_test,
-    parametric_var,
-    subadditivity_counterexample,
-)
-
-__version__ = "0.1.0"
-from .report import (
-    Conflict,
-    Finding,
-    ValidationReport,
-    build_report,
+from .selection import (
+    DeflatedSharpe,
+    deflated_sharpe_ratio,
+    expected_maximum_sharpe,
+    minimum_track_record_length,
 )
 from .shortfall import (
     LEVEL_FRTB,
@@ -116,6 +122,22 @@ from .shortfall import (
     rolling_tail_forecasts,
     tail_statistic,
 )
+from .stress import (
+    CHOC_LIQUIDITE,
+    CRISE_2008,
+    DECORRELATION,
+    HAUSSE_TAUX,
+    SCENARIOS_STANDARD,
+    Combined,
+    CorrelationShock,
+    PriceShock,
+    Shock,
+    StressResult,
+    VolatilityShock,
+    stress,
+    stress_table,
+)
+from .types import Estimate, InsufficientData
 from .validation import (
     INAPPLICABLE,
     REJETE,
@@ -133,6 +155,15 @@ from .validation import (
     build_inventory,
     validate_covariance_model,
     with_materiality,
+)
+from .var import (
+    KupiecResult,
+    TailRisk,
+    cornish_fisher_var,
+    historical_var,
+    kupiec_test,
+    parametric_var,
+    subadditivity_counterexample,
 )
 
 __all__ = [

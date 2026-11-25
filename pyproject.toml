@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nkrisk"
-version = "0.1.0"
+version = "0.2.0"
 description = "Moteur de mesure de risque de portefeuille qui declare son incertitude"
 requires-python = ">=3.11"
 dependencies = ["numpy>=1.26", "pandas>=2.0", "scipy>=1.11"]
@@ -15,6 +15,13 @@ data = ["yfinance>=0.2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# PEP 561 : sans ce marqueur, les 10 000 lignes d'annotations du paquet
+# sont INVISIBLES pour quiconque l'installe — mypy et les éditeurs
+# traitent nkrisk comme du code non typé. Le fichier est vide ; c'est sa
+# présence dans la distribution qui fait le contrat.
+[tool.setuptools.package-data]
+nkrisk = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -58,8 +65,23 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 # Pas de python_version épinglé : mypy utilise l'interpréteur courant.
 # L'épingler à 3.11 faisait échouer l'analyse des stubs numpy, qui
 # utilisent une syntaxe 3.12+.
+#
+# `strict` est actif depuis la séance 15. Avant elle, la configuration
+# se limitait à deux options et « mypy sans erreur » voulait donc dire
+# beaucoup moins que ce que le README laissait croire : aucune fonction
+# n'était obligée d'être annotée, et dix retours `Any` traversaient le
+# moteur sans être vus. Passer en strict a demandé quatorze corrections,
+# toutes réelles.
+strict = true
 ignore_missing_imports = true
 warn_unused_ignores = true
+
+# Les démonstrations sont du code pédagogique : elles s'autorisent des
+# raccourcis que la bibliothèque n'a pas le droit de prendre. C'est un
+# choix déclaré, pas un oubli.
+[[tool.mypy.overrides]]
+module = "examples.*"
+strict = false
 
 [tool.coverage.run]
 source = ["src/nkrisk"]

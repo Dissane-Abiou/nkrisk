@@ -89,7 +89,7 @@ class GBMSpec:
         l'écart-type est proportionnel à √t. C'est toute l'origine de la
         « règle de la racine carrée du temps », qu'on utilisera partout.
         """
-        return self.sigma / np.sqrt(TRADING_DAYS_PER_YEAR)
+        return float(self.sigma / np.sqrt(TRADING_DAYS_PER_YEAR))
 
 
 def generate_prices(

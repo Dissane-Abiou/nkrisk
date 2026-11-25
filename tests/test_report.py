@@ -17,6 +17,7 @@ import math
 import numpy as np
 import pandas as pd
 import pytest
+from conftest import prix_depuis_rendements, univers_facteurs
 
 from nkrisk.report import (
     CORPS_QUEUE,
@@ -52,29 +53,14 @@ def univers(
     garch: bool = False,
     n_periodes: int = T,
 ) -> pd.DataFrame:
-    g = np.random.default_rng(graine)
-    expositions = np.abs(g.normal(0.0, 0.5, (n_actifs, n_facteurs)))
-
-    def tirer(forme: tuple[int, int]) -> np.ndarray:
-        if nu is None:
-            return g.normal(0.0, 1.0, forme)
-        return g.standard_t(nu, forme) * np.sqrt((nu - 2) / nu)
-
-    brut = tirer((n_periodes, n_facteurs)) @ expositions.T + tirer(
-        (n_periodes, n_actifs)
-    )
-    if garch:
-        h = np.empty(n_periodes)
-        h[0] = 1.0
-        choc = g.normal(0.0, 1.0, n_periodes)
-        for t in range(n_periodes - 1):
-            h[t + 1] = 0.01 + 0.09 * (choc[t] ** 2) * h[t] + 0.90 * h[t]
-        brut = brut * np.sqrt(h)[:, None]
-
-    return pd.DataFrame(
-        brut * 0.01,
-        index=pd.bdate_range("2019-01-02", periods=n_periodes),
-        columns=[f"A{i:02d}" for i in range(n_actifs)],
+    """Alias local sur le générateur partagé de `conftest.py`."""
+    return univers_facteurs(
+        n_actifs,
+        graine,
+        n_facteurs=n_facteurs,
+        nu=nu,
+        garch=garch,
+        n_periodes=n_periodes,
     )
 
 
@@ -208,12 +194,7 @@ def test_deux_familles_sont_repliees_independamment():
 
 def test_le_perimetre_se_declenche_quand_les_donnees_sont_suspectes():
     donnees = univers(10, graine=5)
-    prix = {}
-    for i, col in enumerate(donnees.columns):
-        serie = 100.0 * (1.0 + donnees[col]).cumprod()
-        if i == 0:
-            serie = serie.iloc[400:]  # démarrage tardif
-        prix[col] = serie
+    prix = prix_depuis_rendements(donnees, defauts=True)
 
     r = rapport(donnees, prices=prix)
     assert r.conditional
@@ -412,12 +393,7 @@ def test_le_html_echappe_ce_qui_vient_des_donnees():
     la séance 10 appliquée à une sortie plutôt qu'à une entrée.
     """
     donnees = univers(6, graine=34)
-    prix = {}
-    for i, col in enumerate(donnees.columns):
-        serie = 100.0 * (1.0 + donnees[col]).cumprod()
-        if i == 0:
-            serie = serie.iloc[400:]  # force une anomalie, donc un nom d'actif
-        prix[col] = serie
+    prix = prix_depuis_rendements(donnees, defauts=True)
     # Le nom de l'actif remonte dans les avertissements de qualité.
     nouveaux = ["<script>pirate()</script>", *list(donnees.columns[1:])]
     donnees.columns = nouveaux

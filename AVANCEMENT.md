@@ -1,7 +1,7 @@
 # nkrisk — État d'avancement
 
 **Dépôt** · github.com/Dissane-Abiou/nkrisk
-**Dernière mise à jour** · 24 novembre 2026, après la séance 14
+**Dernière mise à jour** · 25 novembre 2026, après la séance 15
 
 > Ce fichier est le journal de bord du projet : ce qui existe, ce que
 > chaque séance a produit, ce qui ne marche pas encore, et ce qui vient
@@ -16,14 +16,14 @@
 
 | | |
 |---|---|
-| **Séances** | 14 |
-| **Commits** | 15, du 23 août au 24 novembre 2026 |
-| **Modules** | 17 |
-| **Lignes versionnées** | ~24 400, dont ~23 200 de Python |
-| **Répartition** | 10 016 source · 7 525 tests · 5 617 démonstrations |
-| **Tests** | 427 (405 rapides ~20 s · 22 Monte Carlo ~50 s) |
+| **Séances** | 15 |
+| **Commits** | 16, du 23 août au 25 novembre 2026 |
+| **Modules** | 19 |
+| **Lignes versionnées** | ~25 700, dont ~24 000 de Python |
+| **Répartition** | 10 299 source · 8 042 tests · 5 617 démonstrations |
+| **Tests** | 450 (427 rapides ~25 s · 23 Monte Carlo ~52 s) |
 | **Couverture** | 89 % |
-| **Analyse statique** | ruff et mypy sans erreur (19 fichiers) |
+| **Analyse statique** | ruff propre · **`mypy --strict`** sans erreur (21 fichiers) |
 | **CI** | GitHub Actions, 4 travaux, Python 3.11 / 3.12 / 3.13 |
 | **Sécurité** | modèle de menace écrit, 40 tests d'attaque |
 | **Licence** | MIT, avec `AUTEURS.md` et obligation d'attribution |
@@ -36,7 +36,76 @@ paie la correction des signes propres de la séance 7.
 
 ---
 
-## 2. Les quatorze séances
+## 1bis. Le premier verdict du moteur sur de vraies données
+
+**24 novembre 2026** · 12 titres TSX et NYSE · 2 834 séances communes ·
+2015-05-22 → 2026-11-23 · `docs/rapport-validation.html`
+
+C'est la première fois que le moteur rend une opinion complète sur un
+marché réel. Il se rejette lui-même, et c'est le résultat qui compte.
+
+| modèle | inventaire | protocole modèle | queue | **verdict** | contraint par |
+|---|---|---|---|---|---|
+| empirique | VALIDÉ | VALIDÉ | REJETÉ | **REJETÉ** | queue |
+| Ledoit-Wolf | VALIDÉ | VALIDÉ | REJETÉ | **REJETÉ** | queue |
+| EWMA λ=0,94 | REJETÉ | REJETÉ | REJETÉ | **REJETÉ** | inventaire |
+| facteurs (Marchenko-Pastur) | VALIDÉ | VALIDÉ | REJETÉ | **REJETÉ** | queue |
+
+### Le chiffre à retenir
+
+```
+calibration globale                        0,76
+calibration hors des 11 % périodes agitées 1,01
+part de la variance dans ces 11 %           50 %
+→ écart CONCENTRÉ
+```
+
+La séance 9 avait trouvé 0,79 sur une fenêtre plus courte, sans pouvoir
+dire d'où venait l'écart. Onze ans de données le disent : **sur les jours
+normaux le modèle est exact — 1,01, on ne fait pas mieux.** La totalité
+des 24 % manquants vient de 11 % de périodes qui portent la moitié de la
+variance de la décennie.
+
+Ce n'est donc pas un biais, c'est un RETARD : le modèle voit la tempête
+une fois qu'elle est entrée dans sa fenêtre d'estimation. Aucun facteur
+correctif ne répare cela — il faut un estimateur qui réagit. Et la
+séance 11 avait déjà mesuré pourquoi la pondération exponentielle ne
+suffit pas : son avantage est en temps, son coût est en dimension, et
+ici elle est le seul modèle rejeté dès l'inventaire.
+
+### Ce que la qualité des données a signalé, et qui conditionne tout
+
+- **SHOP.TO** démarre 97 dates après les autres. En intersection, ce seul
+  titre ampute l'univers entier de 97 séances. Le rapport suggère de
+  l'exclure plutôt que de payer ce prix.
+- **114 dates sur 2 949** ne sont pas communes aux deux places boursières
+  (3,9 %). La séance 9 a mesuré que le choix d'alignement déplace alors
+  la corrélation d'environ 10 % — donc le risque du portefeuille.
+
+Le conflit de PÉRIMÈTRE s'est déclenché : tous les verdicts ci-dessus
+sont conditionnels à des données que le moteur lui-même tient pour
+suspectes, et les instruments en aval n'ont pas été restreints.
+
+### Une limite que seule cette exécution pouvait révéler
+
+**Les quatre modèles sont rejetés sur la queue pour la même raison, et
+cette raison n'est pas eux.** Le protocole impose à chaque modèle de
+covariance une forme de queue GAUSSIENNE : VaR = σ·1,96 et
+ES = VaR·1,193. Sur un marché réel, le rapport ES/VaR réalisé vaut entre
+1,29 et 1,37 — franchement hors de l'intervalle attendu.
+
+Le verdict de queue rejette donc l'hypothèse gaussienne que *j'ai*
+imposée, pas la qualité des estimateurs de covariance. C'est une
+information vraie et utile — une queue gaussienne est fausse sur un vrai
+marché — mais elle ne discrimine pas entre les quatre modèles. Le
+correctif est identifié : laisser chaque modèle déclarer sa propre forme
+de queue, ajustée causalement sur ses résidus.
+
+**La causalité, elle, est propre** : écart maximal 0,0 sur trois sondes.
+
+---
+
+## 2. Les quinze séances
 
 | # | Date | Sujet | Le résultat qui reste |
 |---|---|---|---|
@@ -54,6 +123,7 @@ paie la correction des signes propres de la séance 7.
 | 12 | 22 nov. | Validation de modèles | Un angle mort appartient au protocole, pas au modèle |
 | 13 | 24 nov. | Backtest d'Expected Shortfall | La VaR se backteste sans rien supposer, l'ES non |
 | 14 | 24 nov. | Rapport de validation | Le moteur forme une opinion, et nomme ses propres conflits |
+| 15 | 25 nov. | Durcissement d'ingénierie | Ce qui rend un code consommable n'est pas dans le code |
 
 ### Le détail, pour les séances qui portent le plus
 
@@ -135,9 +205,28 @@ soixante secondes par quelqu'un qui ne lira jamais le code.
 → `src/nkrisk/report.py`, `examples/seance14.py`,
 `examples/rapport_reel.py`, 37 tests
 
+**Séance 15 — durcissement d'ingénierie.** Déclenchée par un retour
+extérieur : « des codes de développeur intermédiaire ». L'audit a donné
+raison au retour, mais pas sur les statistiques — sur **l'emballage**.
+Un relecteur voit le paquet avant le contenu, et le paquet ne livrait
+pas `py.typed`, donc les dix mille lignes d'annotations étaient
+invisibles pour quiconque l'installait. `mypy` n'était pas en `strict`,
+donc « mypy sans erreur » voulait dire beaucoup moins que ce que le
+README laissait croire ; le passage a demandé quatorze corrections
+réelles. Le générateur d'univers était recopié dans cinq fichiers, celui
+du GARCH dans cinq aussi, avec des divergences déjà installées. Et le
+profilage — jamais fait en quatorze séances — a trouvé un `np.quantile`
+recalculé 24 021 fois sur le même tableau : plus de la moitié du temps
+d'un rapport passée sur un invariant. Quatre objets valeur avaient par
+ailleurs un `__eq__` qui **levait une exception** au lieu de répondre,
+défaut vivant depuis la séance 2 parce qu'aucun test ne comparait deux
+estimations.
+→ `py.typed`, `CHANGELOG.md`, `tests/conftest.py`, `tests/test_paquet.py`,
+`src/nkrisk/rendering.py`, `src/nkrisk/selection.py`, 23 tests
+
 ---
 
-## 3. Les dix-sept modules
+## 3. Les dix-neuf modules
 
 | Module | Lignes | Couv. | Contenu |
 |---|---|---|---|
@@ -154,7 +243,9 @@ soixante secondes par quelqu'un qui ne lira jamais le code.
 | `backtest` | 1 152 | 87 % | rejeu causal, audit, coûts, Sharpe dégonflé |
 | `validation` | 998 | 88 % | biais, intervalle par blocs, fiche, inventaire |
 | `shortfall` | 820 | 94 % | Acerbi-Székely, nulles explicites, perte de Fissler-Ziegel |
-| `report` | 1 010 | 92 % | réconciliation des instruments, conflits interprétés, HTML autonome |
+| `report` | 862 | 91 % | réconciliation des instruments, conflits interprétés |
+| `rendering` | 216 | 98 % | la présentation du rapport, séparée du domaine |
+| `selection` | 270 | — | Sharpe dégonflé, longueur minimale de piste |
 | `data.market` | 432 | 89 % | sources injectables, validées |
 | `data.quality` | 742 | 91 % | anomalies, alignement, annualisation |
 | `data.synthetic` | 288 | 81 % | générateurs à vérité connue |
@@ -169,7 +260,7 @@ parcourues. C'est le prochain trou à boucher, et il est petit.
 
 ## 4. Le registre des erreurs
 
-Vingt-neuf erreurs trouvées et corrigées, chacune verrouillée par un
+Trente-trois erreurs trouvées et corrigées, chacune verrouillée par un
 test de non-régression. C'est la partie du projet qui a le plus de
 valeur en entrevue, et c'est pour ça qu'on la garde.
 
@@ -204,6 +295,10 @@ valeur en entrevue, et c'est pour ça qu'on la garde.
 | 14 | **Un test rendu aveugle, troisième fois** | La nulle empirique était la forme réalisée : le test ne pouvait plus la rejeter |
 | 14 | Seuil fixe là où il fallait une loi | Le bootstrap mesurait la variance, pas la largeur réelle de l'estimateur |
 | 14 | Erreur de syntaxe masquée par un `.pyc` | `import` réussissait sur du bytecode périmé ; `ruff` l'a vue |
+| 15 | **Un invariant recalculé 24 021 fois** | 2,67 s sur 5,24 ; un rapport passe de 3,8 s à 2,0 s |
+| 15 | **Quatre `__eq__` qui levaient une exception** | `dataclass` compare un `ndarray` avec `==` ; vivant depuis la séance 2 |
+| 15 | `mypy` n'était pas strict | « sans erreur » reposait sur deux options ; 14 corrections réelles |
+| 15 | `py.typed` absent | 10 000 lignes d'annotations invisibles pour qui installe le paquet |
 
 **La leçon commune, et c'est la seule phrase à retenir de ce tableau :**
 un bug numérique ne lève pas d'exception. Il produit un nombre
@@ -235,11 +330,21 @@ confiance.
   `SECURITE.md` ; ce n'est pas fait.
 - **Pas de documentation générée.** Elle vit dans les docstrings et le
   README.
-- **Le rapport de validation n'a pas encore tourné sur de vraies
-  données.** `examples/rapport_reel.py` est écrit et testé sur données
-  synthétiques ; il demande un accès réseau à Yahoo Finance que
-  l'environnement de développement n'a pas. C'est la prochaine chose à
-  faire, et c'est la seule qui transforme le moteur en verdict.
+- **Cinq modules dépassent encore 800 lignes** : `validation` (998),
+  `backtest` (953), `factors` (929), `shortfall` (894), `report` (862).
+  Deux scissions ont été faites à la séance 15 ; les autres attendent.
+- **Les actions de la CI restent épinglées par étiquette mutable.** La
+  marche à suivre est dans `SECURITE.md` ; elle demande un accès à
+  l'API GitHub que l'environnement de développement n'a pas.
+- **110 noms publics, sans tri par maturité.** Le contrat de stabilité
+  est écrit, mais rien ne distingue encore l'API éprouvée de
+  l'expérimentale.
+- **Le verdict de queue teste l'hypothèse gaussienne imposée par le
+  protocole, pas les modèles.** Les quatre sont rejetés pour la même
+  raison, donc la colonne ne discrimine pas. Voir §1bis.
+- **Le rapport réel n'exclut pas SHOP.TO**, alors que sa propre section
+  « données » recommande de le faire : il signale le coût sans en tirer
+  la conséquence.
 - **Le rapport ne cherche que les conflits qu'on lui a appris à
   reconnaître.** Deux instruments peuvent diverger d'une façon qu'il ne
   voit pas — même limite que les tests des séances 12 et 13.
@@ -254,29 +359,34 @@ confiance.
 
 Par ordre de valeur décroissante, telle que je la vois aujourd'hui.
 
-1. **Lancer `examples/rapport_reel.py`** sur douze titres TSX/NYSE et
-   publier `docs/rapport-validation.html`. C'est la seule tâche de cette
-   liste qui change ce qu'un lecteur extérieur peut voir du projet.
-2. **Correction HAC (Newey-West) sur `compare_tail_models`.** La
+1. **Une forme de queue par modèle, ajustée causalement.** Le verdict de
+   queue impose aujourd'hui une queue gaussienne à tout le monde et
+   rejette les quatre pour la même raison. Laisser chaque modèle
+   déclarer sa forme — par un ν de Student ajusté sur ses propres
+   résidus, à la manière de `fit_decay` à la séance 11 — rendrait la
+   colonne discriminante. C'est la suite directe de ce que le premier
+   rapport réel a montré.
+2. **Vérifier que GitHub Pages sert bien `docs/rapport-validation.html`**
+   et mettre le lien en tête du README. Le rapport existe avec de vraies
+   données dedans ; personne ne sait encore qu'il existe.
+3. **Correction HAC (Newey-West) sur `compare_tail_models`.** La
    p-value de la comparaison de deux modèles de queue ne corrige pas
    l'autocorrélation des différences de perte : elle est donc trop
    petite sur données réelles à volatilité groupée. C'est déclaré dans
    la docstring, ce qui est honnête mais pas suffisant.
-3. **Le test de Christoffersen** (indépendance des dépassements), que la
+4. **Le test de Christoffersen** (indépendance des dépassements), que la
    séance 3 avait explicitement mis hors périmètre. Kupiec ne voit pas
    si les dépassements sont groupés, et un modèle qui produit tous les
    siens pendant la même semaine de krach le passe.
-4. **Protocole de validation pour les scénarios de stress.** La
+5. **Protocole de validation pour les scénarios de stress.** La
    séance 12 valide les covariances, la séance 13 les queues. Le stress
    reste sans protocole, et le trou est nommé.
-5. **Boucher `covariance` à 70 %.** Petit, rapide, et ça remonte la
+6. **Boucher `covariance` à 70 %.** Petit, rapide, et ça remonte la
    couverture globale.
-6. **Une seconde confrontation aux vraies données**, avec l'inventaire
-   de modèles de la séance 12 et le backtest d'ES de la séance 13. On
-   sait déjà que la calibration vaut 0,79 ; on ne sait pas lequel des
-   quatre estimateurs s'en sort le mieux sur le portefeuille qu'il
-   recommande, ni si sa queue tient.
-7. **Épingler les actions de la CI par SHA.** Dix minutes, et ça ferme
+7. **Exclure SHOP.TO et relancer.** Son démarrage tardif ampute
+   l'univers de 97 séances pour un seul titre. Mesurer ce que
+   l'exclusion change aux verdicts serait une expérience en soi.
+8. **Épingler les actions de la CI par SHA.** Dix minutes, et ça ferme
    un point du modèle de menace.
 
 ---
@@ -324,7 +434,7 @@ ruff check src/ tests/ examples/
 mypy src/nkrisk
 
 python examples/seance14.py   # la dernière séance
-python examples/rapport_reel.py      # le rapport sur vraies actions (réseau)
+python examples/rapport_reel.py      # le rapport sur vraies actions (réseau + yfinance)
 python examples/donnees_reelles.py   # demande le réseau (yfinance)
 ```
 

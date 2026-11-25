@@ -38,10 +38,10 @@ sans avertissement.
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -q          # 405 tests rapides (~20 s)
-pytest tests/ -q -m ""    # 427 tests, couverture Monte Carlo incluse (~50 s)
+pytest tests/ -q          # 427 tests rapides (~25 s)
+pytest tests/ -q -m ""    # 450 tests, couverture Monte Carlo incluse (~52 s)
 ruff check src/ tests/ examples/
-mypy src/nkrisk
+mypy src/nkrisk           # configuration `strict`
 ```
 
 Python ≥ 3.11 · numpy · pandas · scipy · scikit-learn (optionnel, pour une
@@ -67,7 +67,9 @@ validation croisée)
 | `data.quality` | détection d'anomalies, politiques d'alignement de calendriers, annualisation correcte |
 | `validation` | statistique de biais, intervalle par blocs, fiche de modèle, inventaire — la validation indépendante du moteur par lui-même |
 | `shortfall` | backtest d'Expected Shortfall (Acerbi-Székely), valeurs critiques simulées, perte de Fissler-Ziegel — la mesure que Bâle impose depuis FRTB |
-| `report` | réconcilie tous les instruments en un verdict unique, nomme les conflits et les interprète, et produit un rapport HTML autonome |
+| `report` | réconcilie tous les instruments en un verdict unique, nomme les conflits et les interprète |
+| `rendering` | la couche de présentation du rapport — HTML autonome, sans ressource externe |
+| `selection` | Sharpe dégonflé et longueur minimale de piste : la correction du biais de sélection |
 | `data.synthetic` | générateurs à vérité connue (GBM, Student-t corrélés) |
 
 ---
@@ -367,6 +369,31 @@ réussissait en lisant du bytecode périmé, et j'ai cru pendant plusieurs
 minutes que le fichier était bon. C'est `ruff` qui l'a vu. Un cache qui
 réussit là où le source échoue est un piège d'outillage, pas de
 raisonnement — et il valait d'être noté.
+
+**Un invariant recalculé dans une boucle, et personne ne l'avait
+mesuré.** `EmpiricalNull.draw` refaisait un `np.quantile` sur
+l'intégralité du tableau de résidus à chaque tirage : 24 021 appels
+identiques pour un seul rapport, **2,67 secondes sur 5,24 à recalculer
+une constante**. Un rapport complet est passé de 3,8 s à 2,0 s. Le
+défaut n'était pas détectable par un test de calcul — il fallait
+profiler, ce que je n'avais jamais fait en quatorze séances.
+→ `test_la_standardisation_nest_calculee_quune_fois_par_niveau`
+
+**Quatre objets valeur dont l'égalité levait une exception.**
+`CovarianceEstimate == CovarianceEstimate` plantait avec
+`ValueError: The truth value of an array ... is ambiguous`, parce que
+le `__eq__` généré par `dataclass` compare les champs avec `==` et
+qu'un `ndarray` rend alors un tableau. Le défaut vivait depuis la
+séance 2, invisible parce qu'aucun test ne comparait deux estimations.
+→ `test_comparer_deux_estimations_identiques_rend_vrai`
+
+**« mypy sans erreur » voulait dire moins que ce que j'écrivais.** La
+configuration se limitait à deux options : aucune fonction n'était
+obligée d'être annotée et dix retours `Any` traversaient le moteur.
+Passer en `strict` a demandé quatorze corrections, toutes réelles.
+
+**Et le paquet ne livrait pas `py.typed`** : les dix mille lignes
+d'annotations étaient invisibles pour quiconque l'installait.
 
 La leçon commune : **un bug numérique ne lève pas d'exception.** Il produit un
 nombre plausible, du bon ordre de grandeur, et faux. La seule défense connue

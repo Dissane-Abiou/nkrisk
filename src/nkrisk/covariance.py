@@ -61,8 +61,10 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from .types import value_equal
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, eq=False)
 class CovarianceEstimate:
     """
     Une matrice de covariance, avec le diagnostic de sa fiabilité.
@@ -77,6 +79,11 @@ class CovarianceEstimate:
     n_obs: int
     method: str
     shrinkage: float = 0.0
+
+    def __eq__(self, autre: object) -> bool:
+        if autre.__class__ is not self.__class__:
+            return NotImplemented
+        return value_equal(self, autre)
 
     @property
     def n_assets(self) -> int:
@@ -115,7 +122,7 @@ class CovarianceEstimate:
 
     @property
     def is_invertible(self) -> bool:
-        return np.linalg.eigvalsh(self.matrix).min() > 1e-12
+        return bool(np.linalg.eigvalsh(self.matrix).min() > 1e-12)
 
     def volatilities(self) -> pd.Series:
         """Volatilités individuelles = racines de la diagonale."""
@@ -273,4 +280,4 @@ def _validate(returns: pd.DataFrame) -> np.ndarray:
     x = returns.to_numpy(dtype=float)
     if x.ndim != 2 or x.shape[1] < 2:
         raise ValueError("au moins 2 actifs requis pour une covariance")
-    return x
+    return np.asarray(x, dtype=float)

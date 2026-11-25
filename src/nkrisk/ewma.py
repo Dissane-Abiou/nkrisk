@@ -381,7 +381,7 @@ def _valider(returns: pd.DataFrame) -> np.ndarray:
     x = returns.to_numpy(dtype=float)
     if x.ndim != 2 or x.shape[1] < 2:
         raise ValueError("au moins 2 actifs requis")
-    return x
+    return np.asarray(x, dtype=float)
 
 
 # ══════════════════════════════════════════════════════════════════════

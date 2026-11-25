@@ -24,7 +24,9 @@ erreurs de devise. Le compilateur (ou ici, le lecteur) ne peut plus oublier.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -183,3 +185,58 @@ class InsufficientData(Exception):
             f"Impossible d'estimer '{self.what}' : {self.n_obs} observations "
             f"disponibles, {self.n_required} requises au minimum."
         )
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Égalité des objets valeur qui portent des tableaux
+# ══════════════════════════════════════════════════════════════════════
+
+
+def value_equal(a: object, b: object) -> bool:
+    """
+    Égalité de valeur pour une dataclass dont un champ est un tableau.
+
+    POURQUOI CE N'EST PAS LE `__eq__` PAR DÉFAUT D'UNE DATACLASS
+    ------------------------------------------------------------
+    Une dataclass compare ses champs un à un avec `==`. Sur un
+    `np.ndarray`, `==` rend un tableau de booléens, et le `if` qui suit
+    lève :
+
+        ValueError: The truth value of an array with more than one
+        element is ambiguous.
+
+    Donc comparer deux `CovarianceEstimate` **plantait**, au lieu de
+    rendre vrai ou faux. Un objet valeur dont l'égalité lève une
+    exception est pire qu'un objet sans égalité : l'appelant n'a aucune
+    raison de s'y attendre, et la panne survient loin de la cause.
+
+    Ce défaut vivait depuis la séance 2 et personne ne l'avait vu —
+    parce qu'aucun test ne comparait deux estimations. C'est le genre
+    de trou qu'un `__eq__` par défaut crée silencieusement.
+
+    CONSÉQUENCE SUR LE HACHAGE, ET ELLE EST VOULUE
+    -----------------------------------------------
+    L'appelant garde la responsabilité du cas « types différents » :
+    `value_equal` suppose que les deux objets sont de la même classe, et
+    chaque `__eq__` rend `NotImplemented` avant de l'appeler. C'est ce
+    qui permet à Python d'essayer l'opérande droit — un détail qui
+    disparaît si le helper rend `False` à la place.
+
+    Définir `__eq__` dans un corps de classe met `__hash__` à `None` :
+    ces objets deviennent non hachables. C'est correct. Ils portent un
+    tableau mutable, donc leur valeur peut changer sous eux, et un
+    objet dont la valeur peut changer ne peut pas honorer le contrat du
+    hachage. Mieux vaut un refus net qu'un dictionnaire qui perd ses
+    clés.
+    """
+    for champ in fields(a):  # type: ignore[arg-type]
+        if not champ.compare:
+            continue
+        x = getattr(a, champ.name)
+        y = getattr(b, champ.name)
+        if isinstance(x, np.ndarray) or isinstance(y, np.ndarray):
+            if not np.array_equal(x, y):
+                return False
+        elif x != y:
+            return False
+    return True

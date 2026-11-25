@@ -297,7 +297,7 @@ def geometric_return(
     _validate_prices(prices)
     n_periods = len(prices) - 1
     total = float(prices.iloc[-1] / prices.iloc[0])
-    return total ** (periods_per_year / n_periods) - 1.0
+    return float(total ** (periods_per_year / n_periods) - 1.0)
 
 
 def compound_annualize(
@@ -473,4 +473,4 @@ def _clean_returns(returns: pd.Series, min_obs: int, what: str) -> np.ndarray:
         raise ValueError(f"valeurs non finies dans les rendements ({what})")
     if len(r) < min_obs:
         raise InsufficientData(len(r), min_obs, what)
-    return r
+    return np.asarray(r, dtype=float)

@@ -431,4 +431,4 @@ def _clean(returns: pd.Series, min_obs: int, quoi: str) -> np.ndarray:
         raise ValueError(f"valeurs non finies dans les rendements ({quoi})")
     if len(r) < min_obs:
         raise InsufficientData(len(r), min_obs, quoi)
-    return r
+    return np.asarray(r, dtype=float)
