@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nkrisk"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Moteur de mesure de risque de portefeuille qui declare son incertitude"
 requires-python = ">=3.11"
 dependencies = ["numpy>=1.26", "pandas>=2.0", "scipy>=1.11"]
@@ -12,6 +12,12 @@ dependencies = ["numpy>=1.26", "pandas>=2.0", "scipy>=1.11"]
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.6", "mypy>=1.11", "scikit-learn>=1.4"]
 data = ["yfinance>=0.2"]
+
+# La version vient de `nkrisk.__version__`, pas d'un littéral recopié
+# ici. Setuptools lit l'attribut statiquement ; il n'y a donc qu'un seul
+# endroit à changer pour publier, et aucun moyen de les désaccorder.
+[tool.setuptools.dynamic]
+version = {attr = "nkrisk.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]

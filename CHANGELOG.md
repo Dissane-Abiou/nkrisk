@@ -60,6 +60,16 @@ les propriétés du paquet en tant que **bibliothèque** qui changent.
 
 ### Corrigé
 
+- **La version est redevenue un littéral**, et `pyproject.toml` la lit
+  (`dynamic = ["version"]`). La première correction de cette séance
+  remplaçait la constante dupliquée par une lecture de
+  `importlib.metadata`, ce qui introduisait un mode de panne que la
+  duplication n'avait pas : la fonction cherche un `.dist-info` sur
+  `sys.path`, et `sys.path` diffère entre `pytest` et `python` nu. Sur
+  une machine portant d'anciennes métadonnées d'installation éditable,
+  `python -c` annonçait 0.1.0 pendant que la suite voyait 0.2.0 — **et
+  le test de cohérence passait au vert**. Remplacer une duplication par
+  un mécanisme n'est pas gratuit.
 - **Performance : un rapport complet passe de 3,8 s à 2,0 s.**
   `EmpiricalNull.draw` recalculait un `np.quantile` sur l'intégralité
   du tableau de résidus à chaque tirage — 24 021 fois pour un seul

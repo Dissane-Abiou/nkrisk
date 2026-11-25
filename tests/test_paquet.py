@@ -18,10 +18,13 @@ qu'il survit si longtemps, et c'est pour cela que ce fichier existe.
 
 from __future__ import annotations
 
+import ast
 import importlib
 import pathlib
 import time
 import tomllib
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as metadata_version
 
 import numpy as np
 import pandas as pd
@@ -252,15 +255,105 @@ def test_un_rapport_complet_reste_sous_une_borne_de_temps():
 # ══════════════════════════════════════════════════════════════════════
 
 
-def test_la_version_est_la_meme_partout():
+def test_pyproject_lit_la_version_depuis_la_source():
     """
-    `__init__.py` portait DEUX affectations de `__version__`, dont la
-    seconde écrasait la première. La version est désormais lue depuis
-    les métadonnées d'installation, donc `pyproject.toml` est la seule
-    source — et ce test empêche qu'on la recopie à nouveau.
+    LE GARDE-FOU QUI REMPLACE UN TEST MENSONGER.
+
+    Première version : `__init__.py` portait deux `__version__`, le
+    second écrasant le premier.
+
+    Deuxième version : `__version__` lisait
+    `importlib.metadata.version("nkrisk")`. L'intention était bonne,
+    le résultat dépendait de `sys.path` — sur une machine où une
+    installation éditable avait laissé d'anciennes métadonnées,
+    `python -c` annonçait 0.1.0 pendant que `pytest`, qui ajoute
+    `src/` au chemin, voyait 0.2.0. **Et le test de cohérence passait
+    au vert**, parce qu'il s'exécutait précisément dans le contexte où
+    les deux concordaient.
+
+    Troisième version, celle-ci : un littéral dans la source, et
+    `pyproject` le lit. Les deux ne peuvent plus diverger — non pas
+    parce qu'un test les compare, mais parce qu'il n'y a qu'une
+    valeur. Ce test vérifie donc la CONFIGURATION, qui est statique,
+    et non deux valeurs d'exécution.
     """
     config = tomllib.loads((RACINE / "pyproject.toml").read_text(encoding="utf-8"))
-    assert nkrisk.__version__ == config["project"]["version"]
+    assert "version" in config["project"].get("dynamic", []), (
+        "la version doit être dynamique, sinon elle est recopiée"
+    )
+    assert "version" not in config["project"], (
+        "version littérale dans pyproject : elle peut diverger de la source"
+    )
+    assert (
+        config["tool"]["setuptools"]["dynamic"]["version"]["attr"]
+        == "nkrisk.__version__"
+    )
+
+
+def test_la_version_est_un_litteral_et_non_un_mecanisme():
+    """
+    Remplacer une duplication par un mécanisme introduit un mode de
+    panne que la duplication n'avait pas. Ici, la valeur doit rester
+    lisible sans exécuter quoi que ce soit.
+    """
+    source = (RACINE / "src" / "nkrisk" / "__init__.py").read_text(encoding="utf-8")
+    affectations = [
+        ligne
+        for ligne in source.splitlines()
+        if ligne.startswith("__version__")
+    ]
+    assert len(affectations) == 1, f"{len(affectations)} affectations de version"
+    arbre = ast.parse(source)
+
+    # On interroge les IMPORTS RÉELS, pas le texte : une recherche
+    # textuelle attrape aussi le commentaire qui explique pourquoi on
+    # n'importe pas `importlib.metadata`. Premier jet de ce test, et il
+    # échouait sur sa propre justification.
+    importes = {
+        noeud.module
+        for noeud in ast.walk(arbre)
+        if isinstance(noeud, ast.ImportFrom) and noeud.module
+    } | {
+        alias.name
+        for noeud in ast.walk(arbre)
+        if isinstance(noeud, ast.Import)
+        for alias in noeud.names
+    }
+    assert "importlib.metadata" not in importes, (
+        "la version ne doit pas dépendre des métadonnées d'installation : "
+        "elles varient avec sys.path"
+    )
+    valeurs = [
+        noeud.value.value
+        for noeud in ast.walk(arbre)
+        if isinstance(noeud, ast.Assign)
+        and isinstance(noeud.value, ast.Constant)
+        and any(
+            isinstance(c, ast.Name) and c.id == "__version__" for c in noeud.targets
+        )
+    ]
+    assert valeurs == [nkrisk.__version__]
+
+
+def test_linstallation_nest_pas_perimee():
+    """
+    Compare le littéral de la source aux métadonnées effectivement
+    installées. Ce n'est pas un test du code mais de l'ENVIRONNEMENT :
+    une installation éditable périmée fait mentir `pip show`, les
+    éditeurs et tout outil qui interroge les métadonnées.
+
+    Il a sa place ici parce que c'est exactement ce qui est arrivé, et
+    que le message doit porter le remède.
+    """
+    try:
+        installee = metadata_version("nkrisk")
+    except PackageNotFoundError:
+        pytest.skip("nkrisk n'est pas installé — exécution depuis les sources")
+    assert installee == nkrisk.__version__, (
+        f"métadonnées périmées : installé {installee}, source "
+        f"{nkrisk.__version__}.\n"
+        f"  → pip uninstall -y nkrisk && pip install -e \".[dev]\""
+    )
 
 
 def test_la_version_courante_figure_au_changelog():

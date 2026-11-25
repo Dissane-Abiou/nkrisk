@@ -38,8 +38,8 @@ sans avertissement.
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -q          # 427 tests rapides (~25 s)
-pytest tests/ -q -m ""    # 450 tests, couverture Monte Carlo incluse (~52 s)
+pytest tests/ -q          # 429 tests rapides (~25 s)
+pytest tests/ -q -m ""    # 452 tests, couverture Monte Carlo incluse (~51 s)
 ruff check src/ tests/ examples/
 mypy src/nkrisk           # configuration `strict`
 ```

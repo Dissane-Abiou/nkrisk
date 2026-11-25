@@ -17,23 +17,26 @@ malgré tout, est dans `CHANGELOG.md`. Toute rupture y est écrite avec
 sa note de migration ; une rupture non documentée est un bogue.
 """
 
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as _version
-
-try:
-    #: Version du paquet, LUE DEPUIS LES MÉTADONNÉES D'INSTALLATION.
-    #:
-    #: Elle n'est pas écrite ici en dur, et c'est délibéré : ce fichier
-    #: portait jusqu'à la séance 15 **deux** affectations de
-    #: `__version__`, à vingt lignes d'écart, dont la seconde écrasait
-    #: silencieusement la première. Une valeur recopiée est une valeur
-    #: qui dérive ; `pyproject.toml` est la seule source.
-    #:
-    #: Le repli ne sert qu'au cas où le paquet est exécuté depuis les
-    #: sources sans avoir été installé.
-    __version__ = _version("nkrisk")
-except PackageNotFoundError:  # pragma: no cover - exécution hors installation
-    __version__ = "0.0.0+inconnu"
+#: Version du paquet — LA SEULE SOURCE DE VÉRITÉ.
+#:
+#: `pyproject.toml` la lit ici (`dynamic = ["version"]`), donc les deux
+#: ne peuvent pas diverger : il n'y a qu'un endroit à changer.
+#:
+#: ⚠️ CE N'EST PAS CE QUE J'AVAIS FAIT D'ABORD, ET C'ÉTAIT PIRE.
+#:
+#: La séance 15 avait remplacé la constante dupliquée par une lecture
+#: de `importlib.metadata.version("nkrisk")`. L'intention était bonne —
+#: supprimer la recopie — mais le résultat dépendait de l'environnement :
+#: la fonction cherche un répertoire `.dist-info` sur `sys.path`, et
+#: `sys.path` n'est pas le même sous `pytest` (qui ajoute `src/`) que
+#: sous `python` nu. Sur une machine où une installation éditable avait
+#: laissé d'anciennes métadonnées, `python -c` annonçait 0.1.0 pendant
+#: que la suite de tests voyait 0.2.0 — et le test de cohérence passait
+#: au vert.
+#:
+#: Un littéral ne peut pas faire ça. Remplacer une duplication par un
+#: mécanisme introduit un mode de panne que la duplication n'avait pas.
+__version__ = "0.2.0"
 
 from .backtest import (
     BacktestResult,

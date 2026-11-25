@@ -21,7 +21,7 @@
 | **Modules** | 19 |
 | **Lignes versionnées** | ~25 700, dont ~24 000 de Python |
 | **Répartition** | 10 299 source · 8 042 tests · 5 617 démonstrations |
-| **Tests** | 450 (427 rapides ~25 s · 23 Monte Carlo ~52 s) |
+| **Tests** | 452 (429 rapides ~25 s · 23 Monte Carlo ~51 s) |
 | **Couverture** | 89 % |
 | **Analyse statique** | ruff propre · **`mypy --strict`** sans erreur (21 fichiers) |
 | **CI** | GitHub Actions, 4 travaux, Python 3.11 / 3.12 / 3.13 |
@@ -260,7 +260,7 @@ parcourues. C'est le prochain trou à boucher, et il est petit.
 
 ## 4. Le registre des erreurs
 
-Trente-trois erreurs trouvées et corrigées, chacune verrouillée par un
+Trente-quatre erreurs trouvées et corrigées, chacune verrouillée par un
 test de non-régression. C'est la partie du projet qui a le plus de
 valeur en entrevue, et c'est pour ça qu'on la garde.
 
@@ -299,6 +299,7 @@ valeur en entrevue, et c'est pour ça qu'on la garde.
 | 15 | **Quatre `__eq__` qui levaient une exception** | `dataclass` compare un `ndarray` avec `==` ; vivant depuis la séance 2 |
 | 15 | `mypy` n'était pas strict | « sans erreur » reposait sur deux options ; 14 corrections réelles |
 | 15 | `py.typed` absent | 10 000 lignes d'annotations invisibles pour qui installe le paquet |
+| 15 | **Une correction pire que le défaut** | La version lue depuis `importlib.metadata` dépendait de `sys.path` ; le test de cohérence passait au vert |
 
 **La leçon commune, et c'est la seule phrase à retenir de ce tableau :**
 un bug numérique ne lève pas d'exception. Il produit un nombre
