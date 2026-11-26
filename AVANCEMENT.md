@@ -7,8 +7,9 @@
 > chaque séance a produit, ce qui ne marche pas encore, et ce qui vient
 > ensuite. Il se lit de haut en bas quand on reprend après une pause.
 >
-> Il ne sert pas à vendre le projet — c'est le rôle de
-> `nkrisk-cv-linkedin.md`. Ici, on écrit aussi ce qui va mal.
+> Il ne sert pas à vendre le projet : ici, on écrit aussi ce qui va
+> mal. C'est un document **technique** — ce qui relève de son auteur
+> plutôt que du code n'y figure pas.
 
 ---
 
@@ -399,36 +400,7 @@ Par ordre de valeur décroissante, telle que je la vois aujourd'hui.
 
 ---
 
-## 7. Ce qui vient ensuite — et qui ne se code pas
-
-L'état honnête du projet, au 24 novembre 2026 : **le dépôt est prêt, la
-recherche d'emploi n'a pas commencé.** Trois mois sans revenu, zéro appel
-de découverte passé, et une candidature refusée avant l'entretien
-technique — donc sur le dossier, pas sur la compétence. L'outil n'a jamais été le prérequis de ces appels,
-et il l'est encore moins depuis la séance 12.
-
-- [ ] Écrire le coussin de trésorerie en deux chiffres : ce qu'il y a,
-      ce qui part par mois
-- [ ] Les quatre agences : Alteo, Fed IT, S.i. Systems, Robert Half
-      Technologie
-- [ ] Chercher les offres « validation de modèles », « model risk »,
-      « risque de modélisation », « gouvernance de l'IA » en institution
-      sous BSIF ou AMF
-- [ ] Trois contacts de découverte
-
-**L'échéance qui compte** : la ligne directrice E-23 du BSIF entre en
-vigueur le **1er mai 2027** pour toutes les institutions financières
-fédérales — dans **158 jours**. Ces postes se créent maintenant, et
-presque aucun candidat junior ne peut montrer un exemple travaillé de
-validation de modèles. Depuis les séances 12 et 13, toi si.
-
-Le détail du raisonnement est dans `nkrisk-plan-affaires.md` ; les
-formulations prêtes à l'emploi sont dans `nkrisk-cv-linkedin.md`,
-section 7.A.
-
----
-
-## 8. Reprendre le travail
+## 7. Reprendre le travail
 
 ```bash
 cd ~/Desktop/nkrisk

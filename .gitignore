@@ -5,3 +5,60 @@ __pycache__/
 .venv/
 strategie_nkanada*.md
 *.md.bak
+
+# ══════════════════════════════════════════════════════════════════════
+#  CE QUI NE DOIT JAMAIS ÊTRE PUBLIÉ
+# ══════════════════════════════════════════════════════════════════════
+#
+# Ce dépôt est public. Les règles ci-dessus protégeaient déjà les
+# documents de stratégie ; deux fichiers sont malgré tout passés au
+# travers et y sont restés plusieurs jours :
+#
+#   — AVANCEMENT.md §7, qui décrivait la situation personnelle de
+#     l'auteur (revenus, candidatures, agences démarchées) ;
+#   — DEFENSE.md, cinq cents lignes de préparation d'entretien
+#     rédigées à la deuxième personne, réponses comprises.
+#
+# Aucun des deux n'était un secret technique. Les deux auraient été lus
+# par la première personne ouvrant le dépôt pour évaluer son auteur —
+# c'est-à-dire exactement le lectorat visé.
+#
+# LA RÈGLE : ce qui parle de l'AUTEUR plutôt que du CODE reste dehors.
+
+DEFENSE.md
+cette-semaine*.md
+recherche-emploi*.md
+*-plan-affaires.md
+*-cv-linkedin.md
+*portrait-fondateur*
+nkrisk_dossier_cv*.md
+nkrisk_avancement.md
+NOTES-PERSO*.md
+
+# ══════════════════════════════════════════════════════════════════════
+#  Outils et environnements
+# ══════════════════════════════════════════════════════════════════════
+
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+build/
+dist/
+.eggs/
+venv/
+env/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# Données réelles : ni redistribuables, ni reproductibles.
+data/*.csv
+data/*.parquet
+*.pkl
